@@ -13,6 +13,10 @@ import {
   CheckCircle2,
   Crosshair,
   RefreshCw,
+  Compass,
+  Lock,
+  ChevronRight,
+  HelpCircle,
 } from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
@@ -62,10 +66,16 @@ export default function ReportMapPicker({
   onLocationChange,
   onProximityAlert,
 }: Props) {
+  // GPS State
   const [isLocating, setIsLocating] = useState(false);
+  const [hasGpsLocked, setHasGpsLocked] = useState(false);
+  const [showMandatoryModal, setShowMandatoryModal] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
   const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
+
+  // Duplicate check
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
   const [reports, setReports] = useState<RoadReport[]>([]);
   
@@ -82,6 +92,18 @@ export default function ReportMapPicker({
   const allDistrictsLayerRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
+
+  // Trigger Mandatory GPS Modal on first visit to enforce location permission
+  useEffect(() => {
+    // Show mandatory GPS activation modal if location hasn't been locked yet
+    const timer = setTimeout(() => {
+      if (!hasGpsLocked) {
+        setShowMandatoryModal(true);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Clean up geolocation watch on unmount
   useEffect(() => {
@@ -227,11 +249,6 @@ export default function ReportMapPicker({
 
         mapInstanceRef.current = map;
         markerRef.current = marker;
-
-        // Automatically trigger ท่าที่ 1: Live Hardware GPS Lock upon mounting
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-          triggerAutoGpsLock(map, marker, L);
-        }
       }
     }
 
@@ -289,11 +306,12 @@ export default function ReportMapPicker({
   };
 
   /**
-   * ท่าที่ 1: ดึงพิกัดตำแหน่งปัจจุบันจาก GPS มือถือโดยตรง และป้อนค่าเข้าฟอร์มทันที
+   * ท่าที่ 1: สั่งดึงพิกัดจาก Hardware GPS มือถือทันที พร้อมระบบ Multi-Sample Convergence
    */
   const triggerAutoGpsLock = async (mapObj?: any, markerObj?: any, L?: any) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGeoError('อุปกรณ์ของคุณไม่รองรับ GPS');
+      setShowMandatoryModal(false);
       return;
     }
 
@@ -302,6 +320,7 @@ export default function ReportMapPicker({
     const Leaflet = L || (await import('leaflet'));
 
     setIsLocating(true);
+    setPermissionDenied(false);
     setGeoError(null);
     setGpsStatusInfo({
       type: 'info',
@@ -322,6 +341,8 @@ export default function ReportMapPicker({
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 10);
       setGpsAccuracyMeters(accuracy);
+      setHasGpsLocked(true);
+      setShowMandatoryModal(false);
 
       if (accuracyCircleRef.current && currentMap) {
         currentMap.removeLayer(accuracyCircleRef.current);
@@ -371,8 +392,9 @@ export default function ReportMapPicker({
           type: 'warning',
           text: '💡 ท่าที่ 2: ท่านสามารถแตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่/ถนนได้ทันที',
         });
+        setShowMandatoryModal(false);
       }
-    }, 5500);
+    }, 6000);
 
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
@@ -389,7 +411,8 @@ export default function ReportMapPicker({
             text: `🛰️ กำลังรับสัญญาณดาวเทียม (ความแม่นยำ: ±${Math.round(acc)} ม.)...`,
           });
 
-          if (acc <= 25 || samples >= 4) {
+          // เมื่อความแม่นยำดีขึ้นเรื่อยๆ (< 25 เมตร หรือตัวอย่างเกิน 3 รอบ) ให้ล็อกทันที
+          if (acc <= 25 || samples >= 3) {
             clearTimeout(autoTimeout);
             if (watchIdRef.current !== null) {
               navigator.geolocation.clearWatch(watchIdRef.current);
@@ -402,16 +425,20 @@ export default function ReportMapPicker({
         (err) => {
           clearTimeout(autoTimeout);
           setIsLocating(false);
-          setGpsStatusInfo({
-            type: 'warning',
-            text: '⚠️ ไม่สามารถดึง GPS อัตโนมัติได้ — สามารถลากหมุดปักเองได้ครับ',
-          });
+          if (err.code === 1) { // PERMISSION_DENIED
+            setPermissionDenied(true);
+            setGeoError('คุณได้ปฏิเสธการเข้าถึงตำแหน่ง กรุณาเปิดสิทธิ์ Location ในการตั้งค่าเบราว์เซอร์');
+          } else {
+            setGeoError('ไม่สามารถดึงสัญญาณ GPS ได้ในขณะนี้ — เข้าสู่โหมดปักหมุดเอง');
+            setShowMandatoryModal(false);
+          }
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     } catch (e) {
       clearTimeout(autoTimeout);
       setIsLocating(false);
+      setShowMandatoryModal(false);
     }
   };
 
@@ -478,6 +505,86 @@ export default function ReportMapPicker({
 
   return (
     <div className="space-y-2.5">
+      {/* 🌟 Mandatory GPS Activation Modal (บังคับเปิด GPS เพื่อความแม่นยำสูงสุด) */}
+      {showMandatoryModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border-2 border-amber-300 text-stone-900 space-y-4 animate-scaleUp">
+            {/* Top Close Button (Dismiss to Fallback ท่าที่ 2) */}
+            <button
+              onClick={() => setShowMandatoryModal(false)}
+              className="absolute top-4 right-4 rounded-full bg-stone-100 p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700 transition-all"
+              aria-label="ปิด"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Glowing GPS Radar Icon Header */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-white shadow-lg shadow-amber-600/30">
+                <span className="absolute h-full w-full rounded-2xl bg-amber-400 animate-ping opacity-25" />
+                <Navigation className={`h-7 w-7 ${isLocating ? 'animate-spin' : ''}`} />
+              </div>
+              <div className="min-w-0">
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-amber-900 border border-amber-300">
+                  ขั้นตอนสำคัญ
+                </span>
+                <h3 className="text-base font-extrabold text-stone-900 mt-0.5">
+                  ระบุตำแหน่งด้วย GPS มือถือ
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              ระบบจำเป็นต้องใช้พิกัดดาวเทียมจากมือถือของคุณ เพื่อให้เจ้าหน้าที่ <strong>อบจ. และแขวงทางหลวงศรีสะเกษ</strong> ทราบจุดหลุมถนนชำรุดได้อย่างแม่นยำ 5–10 เมตร
+            </p>
+
+            {/* If Permission Denied: Show Step-by-Step Unlock Guide */}
+            {permissionDenied ? (
+              <div className="rounded-2xl bg-rose-50 p-3.5 border border-rose-200 text-xs text-rose-900 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                  <Lock className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span>วิธีปลดล็อกสิทธิ์ GPS บนมือถือ:</span>
+                </div>
+                <ul className="text-[11px] text-stone-700 space-y-1 list-disc pl-4">
+                  <li><strong>iPhone (Safari):</strong> แตะที่ <code>aA</code> ด้านบน ➡️ การตั้งค่าเว็บไซต์ ➡️ ตำแหน่ง ➡️ อนุญาต</li>
+                  <li><strong>Android (Chrome):</strong> แตะไอคอนแม่กุญแจ <code>🔒</code> ➡️ สิทธิ์ ➡️ ตำแหน่ง ➡️ อนุญาต</li>
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Primary Action Button (Direct User Touch Gesture) */}
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => triggerAutoGpsLock()}
+                disabled={isLocating}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-amber-600/30 hover:from-amber-700 hover:to-amber-500 active:scale-98 transition-all"
+              >
+                {isLocating ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <span>กำลังเชื่อมต่อดาวเทียม GPS...</span>
+                  </>
+                ) : (
+                  <>
+                    <Compass className="h-5 w-5" />
+                    <span>🛰️ แตะเปิด GPS และระบุตำแหน่งเดี๋ยวนี้</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMandatoryModal(false)}
+                className="w-full py-2 text-xs font-medium text-stone-500 hover:text-stone-800 transition-all text-center"
+              >
+                ข้ามไปก่อน • ขอปักหมุดเองบนแผนที่ (ท่าที่ 2)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header Bar: District & Primary GPS Button */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -597,7 +704,7 @@ export default function ReportMapPicker({
       )}
 
       {isOutside && !gpsStatusInfo && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 p-2 text-xs text-rose-900">
+        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 px-2.5 py-1 text-[11px] text-rose-900">
           <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0" />
           <span>พิกัดอยู่นอกเขต 22 อำเภอ จ.ศรีสะเกษ</span>
         </div>
