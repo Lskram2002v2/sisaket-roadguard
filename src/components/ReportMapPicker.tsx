@@ -1,11 +1,27 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { MapPin, Navigation, AlertTriangle, ShieldAlert, Sparkles, Layers, Search, X } from 'lucide-react';
+import {
+  MapPin,
+  Navigation,
+  AlertTriangle,
+  ShieldAlert,
+  Sparkles,
+  Layers,
+  Search,
+  X,
+  Check,
+  Maximize2,
+  CheckCircle2,
+  ChevronDown,
+  Compass,
+  CornerDownRight,
+} from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
 import { RoadReport } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
+import { playAlertChime } from '@/lib/audio-synth';
 
 // ฐานข้อมูลสถานที่สำคัญและชุมชนใน จ.ศรีสะเกษ สำหรับการค้นหาไว 0ms (Instant Sisaket Places Index)
 const SISAKET_LANDMARKS_INDEX = [
@@ -49,18 +65,31 @@ export default function ReportMapPicker({
   onLocationChange,
   onProximityAlert,
 }: Props) {
+  // Modal State
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  
+  // Working Location in Modal
+  const [selectedLat, setSelectedLat] = useState(latitude);
+  const [selectedLng, setSelectedLng] = useState(longitude);
+  const [selectedDistrict, setSelectedDistrict] = useState(district);
+
+  // GPS & Engine States
   const [isLocating, setIsLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
+  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
+  const [hasConfirmedOnce, setHasConfirmedOnce] = useState(false);
+
+  // Reports for Duplicate check
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
   const [reports, setReports] = useState<RoadReport[]>([]);
   
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ name: string; district: string; lat: number; lng: number }>>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
+  // Leaflet references
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -69,6 +98,7 @@ export default function ReportMapPicker({
   const activeDistrictLayerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
 
+  // Clean up geolocation watch on unmount
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
@@ -77,6 +107,7 @@ export default function ReportMapPicker({
     };
   }, []);
 
+  // Load existing reports for duplicate check
   useEffect(() => {
     const loadReports = async () => {
       const data = await roadStore.getAllReports();
@@ -85,19 +116,12 @@ export default function ReportMapPicker({
     loadReports();
   }, []);
 
-  // Sync Leaflet marker & map view when latitude/longitude props update from outside (e.g., photo GPS extraction)
+  // Sync internal states when external props change (e.g. Photo EXIF detection)
   useEffect(() => {
-    if (mapInstanceRef.current && markerRef.current) {
-      const currentPos = markerRef.current.getLatLng();
-      if (
-        Math.abs(currentPos.lat - latitude) > 0.0001 ||
-        Math.abs(currentPos.lng - longitude) > 0.0001
-      ) {
-        markerRef.current.setLatLng([latitude, longitude]);
-        mapInstanceRef.current.flyTo([latitude, longitude], 15, { duration: 0.6 });
-      }
-    }
-  }, [latitude, longitude]);
+    setSelectedLat(latitude);
+    setSelectedLng(longitude);
+    setSelectedDistrict(district);
+  }, [latitude, longitude, district]);
 
   // Check proximity whenever latitude/longitude or reports update
   useEffect(() => {
@@ -120,29 +144,79 @@ export default function ReportMapPicker({
     }
   }, [latitude, longitude, reports, onProximityAlert]);
 
-  // Leaflet Map Initialization
+  // Open Fullscreen Map Modal and trigger High-Accuracy GPS Lock
+  const handleOpenMapModal = () => {
+    setIsMapModalOpen(true);
+    // When modal opens, Leaflet map is initialized / resized in useEffect
+  };
+
+  // Close Modal without saving unconfirmed changes
+  const handleCloseMapModal = () => {
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsLocating(false);
+    setIsMapModalOpen(false);
+  };
+
+  // Confirm Location Button Click (Saves to Parent Form and Closes Modal)
+  const handleConfirmLocation = () => {
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsLocating(false);
+    onLocationChange(selectedLat, selectedLng, selectedDistrict);
+    setHasConfirmedOnce(true);
+    setIsMapModalOpen(false);
+    playAlertChime('success');
+  };
+
+  // Initialize and manage Leaflet map when modal is open
   useEffect(() => {
-    async function initLeaflet() {
-      if (typeof window === 'undefined' || !mapContainerRef.current) return;
+    if (!isMapModalOpen) {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      return;
+    }
+
+    let isSubscribed = true;
+
+    async function initLeafletMap() {
+      if (typeof window === 'undefined') return;
       const L = await import('leaflet');
 
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
+      // Small delay to ensure modal DOM container is fully rendered in the viewport
+      setTimeout(() => {
+        if (!isSubscribed || !mapContainerRef.current) return;
 
-      if (!mapInstanceRef.current && mapContainerRef.current) {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        });
+
+        const initialLat = selectedLat || SISAKET_CENTER.lat;
+        const initialLng = selectedLng || SISAKET_CENTER.lng;
+
         const map = L.map(mapContainerRef.current, {
-          center: [latitude || SISAKET_CENTER.lat, longitude || SISAKET_CENTER.lng],
-          zoom: 13,
+          center: [initialLat, initialLng],
+          zoom: 14,
           zoomControl: false,
-          scrollWheelZoom: false,
+          scrollWheelZoom: true,
+          attributionControl: false,
         });
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
           maxZoom: 19,
         }).addTo(map);
 
@@ -151,7 +225,7 @@ export default function ReportMapPicker({
         // 1. วาดเส้นแบ่งเขต 22 อำเภอศรีสะเกษของจริงทั้งหมด (Real Administrative GeoJSON Boundaries)
         const allDistricts = L.geoJSON(SISAKET_GEOJSON as any, {
           style: {
-            color: '#A855F7', // เส้นสีม่วงอ่อน
+            color: '#A855F7',
             weight: 1.5,
             opacity: 0.6,
             fillColor: '#9333EA',
@@ -171,191 +245,99 @@ export default function ReportMapPicker({
 
         allDistrictsLayerRef.current = allDistricts;
 
-        // Custom Amber Marker
+        // Custom Amber Golden Marker with radar glow
         const amberIcon = L.divIcon({
           className: 'custom-amber-marker',
           html: `
-            <div style="background-color: #C27803; width: 34px; height: 34px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 4px 16px rgba(194, 120, 3, 0.7); display: flex; align-items: center; justify-content: center; color: white;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
+            <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+              <span style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: rgba(217, 119, 6, 0.35); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+              <div style="background: linear-gradient(135deg, #D97706, #B45309); width: 36px; height: 36px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 4px 16px rgba(180, 83, 9, 0.7); display: flex; align-items: center; justify-content: center; color: white; position: relative; z-index: 10;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+              </div>
             </div>
           `,
-          iconSize: [34, 34],
-          iconAnchor: [17, 34],
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
         });
 
-        const marker = L.marker([latitude, longitude], {
+        const marker = L.marker([initialLat, initialLng], {
           draggable: true,
           icon: amberIcon,
         }).addTo(map);
 
+        // ท่า 2: ลากหมุดเอง (Manual Marker Dragging)
         marker.on('dragend', (e: any) => {
           const pos = e.target.getLatLng();
-          handlePositionUpdate(pos.lat, pos.lng);
+          updateManualPosition(pos.lat, pos.lng);
         });
 
+        // ท่า 2: แตะบนแผนที่เพื่อย้ายหมุด (Tap anywhere on map)
         map.on('click', (e: any) => {
           const pos = e.latlng;
           marker.setLatLng(pos);
-          handlePositionUpdate(pos.lat, pos.lng);
+          updateManualPosition(pos.lat, pos.lng);
         });
 
         mapInstanceRef.current = map;
         markerRef.current = marker;
 
-        // Auto-Trigger High-Accuracy Satellite GPS Lock on Mount
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-          triggerAutoGpsLock(map, marker, L);
-        }
-      }
+        // Force Leaflet to recalculate container bounds
+        map.invalidateSize();
+
+        // Highlight the current district boundary
+        updateActiveDistrictLayer(selectedDistrict, map, L);
+
+        // Execute ท่า 1: Automatic High-Precision GPS Lock on Modal Open
+        triggerSatelliteGpsLock(map, marker, L);
+      }, 150);
     }
 
-    const triggerAutoGpsLock = (mapObj: any, markerObj: any, leafletObj: any) => {
-      setIsLocating(true);
-      setGpsStatusInfo({
-        type: 'info',
-        text: '🛰️ กำลังระบุพิกัดดาวเทียม GPS อัตโนมัติความแม่นยำสูง...',
-      });
-
-      let bestAcc = Infinity;
-      let bestPosition: GeolocationPosition | null = null;
-      let count = 0;
-
-      const autoTimeout = setTimeout(() => {
-        if (watchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-        setIsLocating(false);
-        if (bestPosition) {
-          applyLocation(bestPosition);
-        } else {
-          setGpsStatusInfo({
-            type: 'warning',
-            text: '⚠️ เปิดโหมดปักหมุดเอง: ท่านสามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่/ถนนได้ทันที',
-          });
-        }
-      }, 5000);
-
-      const applyLocation = (pos: GeolocationPosition) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = Math.round(pos.coords.accuracy || 10);
-
-        if (isWithinSisaket(lat, lng)) {
-          if (accuracyCircleRef.current && mapObj) {
-            mapObj.removeLayer(accuracyCircleRef.current);
-          }
-          if (mapObj && markerObj) {
-            accuracyCircleRef.current = leafletObj.circle([lat, lng], {
-              radius: accuracy,
-              color: '#2563EB',
-              weight: 2,
-              fillColor: '#3B82F6',
-              fillOpacity: 0.15,
-            }).addTo(mapObj);
-
-            mapObj.flyTo([lat, lng], 16, { duration: 0.8 });
-            markerObj.setLatLng([lat, lng]);
-          }
-
-          handlePositionUpdate(lat, lng);
-          const nearest = findNearestDistrict(lat, lng);
-          setGpsStatusInfo({
-            type: 'success',
-            text: `🎯 ล็อกพิกัดดาวเทียม GPS อัตโนมัติสำเร็จ: อ.${nearest.name_th} (ความแม่นยำ ±${accuracy} ม.)`,
-          });
-        } else {
-          setGpsStatusInfo({
-            type: 'warning',
-            text: `⚠️ พิกัดดาวเทียมอยู่นอกพื้นที่ จ.ศรีสะเกษ (เปิดโหมดปักหมุดเอง) — สามารถพิมพ์ค้นหา หรือเลือก 22 อำเภอเพื่อปักหมุดได้ทันที`,
-          });
-        }
-      };
-
-      try {
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          (pos) => {
-            count++;
-            const acc = pos.coords.accuracy;
-            if (acc < bestAcc) {
-              bestAcc = acc;
-              bestPosition = pos;
-            }
-
-            if (acc <= 25 || count >= 3) {
-              clearTimeout(autoTimeout);
-              if (watchIdRef.current !== null) {
-                navigator.geolocation.clearWatch(watchIdRef.current);
-                watchIdRef.current = null;
-              }
-              setIsLocating(false);
-              applyLocation(pos);
-            }
-          },
-          () => {
-            clearTimeout(autoTimeout);
-            setIsLocating(false);
-            setGpsStatusInfo({
-              type: 'warning',
-              text: '⚠️ ไม่สามารถเข้าถึง GPS ได้ (เปิดโหมดปักหมุดเอง) — สามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่ได้เลยครับ',
-            });
-          },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-        );
-      } catch (e) {
-        clearTimeout(autoTimeout);
-        setIsLocating(false);
-      }
-    };
-
-    initLeaflet();
+    initLeafletMap();
 
     return () => {
+      isSubscribed = false;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [isMapModalOpen]);
 
-  // Update Highlighted Real Purple Boundary for the Selected District
-  useEffect(() => {
-    async function updateActiveDistrictBoundary() {
-      if (!mapInstanceRef.current) return;
-      const L = await import('leaflet');
+  // Highlight active district polygon boundary
+  const updateActiveDistrictLayer = (targetDistrict: string, mapObj: any, L: any) => {
+    if (!mapObj) return;
 
-      // ลบ Layer ไฮไลต์เดิมก่อน
-      if (activeDistrictLayerRef.current) {
-        mapInstanceRef.current.removeLayer(activeDistrictLayerRef.current);
-        activeDistrictLayerRef.current = null;
-      }
-
-      const activeGeo = getDistrictGeoJSON(district);
-      if (activeGeo) {
-        const activeLayer = L.geoJSON(activeGeo as any, {
-          style: {
-            color: '#7E22CE', // ม่วงเข้มคมชัด (Solid Real Purple)
-            weight: 3.5,
-            opacity: 1,
-            fillColor: '#9333EA', // ม่วงสว่างโปร่งแสง
-            fillOpacity: 0.22,
-            dashArray: '5, 5',
-          },
-        }).addTo(mapInstanceRef.current);
-
-        activeDistrictLayerRef.current = activeLayer;
-      }
+    if (activeDistrictLayerRef.current) {
+      mapObj.removeLayer(activeDistrictLayerRef.current);
+      activeDistrictLayerRef.current = null;
     }
 
-    updateActiveDistrictBoundary();
-  }, [district]);
+    const activeGeo = getDistrictGeoJSON(targetDistrict);
+    if (activeGeo) {
+      const activeLayer = L.geoJSON(activeGeo as any, {
+        style: {
+          color: '#7E22CE',
+          weight: 3.5,
+          opacity: 1,
+          fillColor: '#9333EA',
+          fillOpacity: 0.22,
+          dashArray: '5, 5',
+        },
+      }).addTo(mapObj);
 
-  const handlePositionUpdate = (lat: number, lng: number) => {
+      activeDistrictLayerRef.current = activeLayer;
+    }
+  };
+
+  // Helper for manual position update
+  const updateManualPosition = (lat: number, lng: number) => {
     const nearest = findNearestDistrict(lat, lng);
-    onLocationChange(lat, lng, nearest.name_th);
+    setSelectedLat(lat);
+    setSelectedLng(lng);
+    setSelectedDistrict(nearest.name_th);
 
     if (!isWithinSisaket(lat, lng)) {
       setGeoError('พิกัดอยู่นอกเขตจังหวัดศรีสะเกษ กรุณาเลือกจุดภายใน 22 อำเภอ');
@@ -364,33 +346,24 @@ export default function ReportMapPicker({
     }
   };
 
-  const handleDistrictJump = (targetDistrictName: string) => {
-    const target = SISAKET_DISTRICTS.find((d) => d.name_th === targetDistrictName);
-    if (!target) return;
-
-    if (mapInstanceRef.current && markerRef.current) {
-      mapInstanceRef.current.flyTo([target.lat, target.lng], 14, { duration: 0.8 });
-      markerRef.current.setLatLng([target.lat, target.lng]);
-    }
-
-    handlePositionUpdate(target.lat, target.lng);
-  };
-
   /**
-   * ดึงตำแหน่ง GPS ดาวเทียมความแม่นยำสูง (Multi-Sample Satellite Convergence Engine)
+   * ท่า 1: Automatic High-Precision Satellite GPS Lock (Multi-Sample Convergence Engine)
    */
-  const handleGetLiveLocation = async () => {
-    if (!navigator.geolocation) {
+  const triggerSatelliteGpsLock = async (mapObj?: any, markerObj?: any, L?: any) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGeoError('อุปกรณ์หรือเบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด GPS');
       return;
     }
 
-    const L = await import('leaflet');
+    const currentMap = mapObj || mapInstanceRef.current;
+    const currentMarker = markerObj || markerRef.current;
+    const Leaflet = L || (await import('leaflet'));
+
     setIsLocating(true);
     setGeoError(null);
     setGpsStatusInfo({
       type: 'info',
-      text: '🛰️ กำลังค้นหาสัญญาณดาวเทียม GPS ความแม่นยำสูง (รอสักครู่ 2-3 วินาที)...',
+      text: '🛰️ กำลังรับสัญญาณดาวเทียม GPS ความแม่นยำสูง (รอสักครู่ 2-3 วินาที)...',
     });
 
     if (watchIdRef.current !== null) {
@@ -406,25 +379,27 @@ export default function ReportMapPicker({
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 10);
+      setGpsAccuracyMeters(accuracy);
 
-      if (accuracyCircleRef.current && mapInstanceRef.current) {
-        mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+      if (accuracyCircleRef.current && currentMap) {
+        currentMap.removeLayer(accuracyCircleRef.current);
+        accuracyCircleRef.current = null;
       }
 
-      if (mapInstanceRef.current && markerRef.current) {
-        accuracyCircleRef.current = L.circle([lat, lng], {
+      if (currentMap && currentMarker) {
+        accuracyCircleRef.current = Leaflet.circle([lat, lng], {
           radius: accuracy,
           color: '#2563EB',
           weight: 2,
           fillColor: '#3B82F6',
           fillOpacity: 0.15,
-        }).addTo(mapInstanceRef.current);
+        }).addTo(currentMap);
 
-        mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
-        markerRef.current.setLatLng([lat, lng]);
+        currentMap.flyTo([lat, lng], 16, { duration: 0.8 });
+        currentMarker.setLatLng([lat, lng]);
       }
 
-      handlePositionUpdate(lat, lng);
+      updateManualPosition(lat, lng);
       const nearest = findNearestDistrict(lat, lng);
 
       if (isWithinSisaket(lat, lng)) {
@@ -435,7 +410,7 @@ export default function ReportMapPicker({
       } else {
         setGpsStatusInfo({
           type: 'warning',
-          text: `📶 พิกัดเครือข่ายอินเทอร์เน็ต (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกเขต จ.ศรีสะเกษ — สามารถพิมพ์ค้นหาหรือเลือก 22 อำเภอได้ครับ`,
+          text: `📶 พิกัด GPS อยู่นอกเขต จ.ศรีสะเกษ — เข้าสู่โหมดปักหมุดเอง ท่านสามารถพิมพ์ค้นหาหรือเลือก 22 อำเภอได้ครับ`,
         });
       }
     };
@@ -448,50 +423,63 @@ export default function ReportMapPicker({
       setIsLocating(false);
       if (bestPos) {
         applyGpsPosition(bestPos);
+      } else {
+        setGpsStatusInfo({
+          type: 'warning',
+          text: '⚠️ เปิดโหมดปักหมุดเอง: ท่านสามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่/ถนนได้ทันที',
+        });
       }
     }, 5500);
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        samplesReceived++;
-        const acc = pos.coords.accuracy;
+    try {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          samplesReceived++;
+          const acc = pos.coords.accuracy;
 
-        if (acc < bestAccuracy) {
-          bestAccuracy = acc;
-          bestPos = pos;
-        }
-
-        setGpsStatusInfo({
-          type: 'info',
-          text: `🛰️ กำลังรับสัญญาณดาวเทียม (ความแม่นยำปัจจุบัน: ±${Math.round(acc)} ม.)...`,
-        });
-
-        // เมื่อได้ความแม่นยำระดับดาวเทียม (< 25 เมตร) หรือรับสัญญาณเกิน 4 รอบ ให้ล็อกพิกัดทันที
-        if (acc <= 25 || samplesReceived >= 4) {
-          clearTimeout(maxWaitTimeout);
-          if (watchIdRef.current !== null) {
-            navigator.geolocation.clearWatch(watchIdRef.current);
-            watchIdRef.current = null;
+          if (acc < bestAccuracy) {
+            bestAccuracy = acc;
+            bestPos = pos;
           }
+
+          setGpsStatusInfo({
+            type: 'info',
+            text: `🛰️ กำลังรับสัญญาณดาวเทียม (ความแม่นยำปัจจุบัน: ±${Math.round(acc)} ม.)...`,
+          });
+
+          // เมื่อได้ความแม่นยำระดับดาวเทียม (< 25 เมตร) หรือรับสัญญาณเกิน 4 รอบ ให้ล็อกพิกัดทันที
+          if (acc <= 25 || samplesReceived >= 4) {
+            clearTimeout(maxWaitTimeout);
+            if (watchIdRef.current !== null) {
+              navigator.geolocation.clearWatch(watchIdRef.current);
+              watchIdRef.current = null;
+            }
+            setIsLocating(false);
+            applyGpsPosition(pos);
+          }
+        },
+        (err) => {
+          clearTimeout(maxWaitTimeout);
           setIsLocating(false);
-          applyGpsPosition(pos);
+          setGpsStatusInfo({
+            type: 'warning',
+            text: '⚠️ ไม่สามารถดึง GPS ได้ (เปิดโหมดปักหมุดเอง) — ท่านสามารถแตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่ด้านบนแทนได้เลยครับ',
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
-      },
-      (err) => {
-        clearTimeout(maxWaitTimeout);
-        setIsLocating(false);
-        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาเปิด Location Service ในการตั้งค่ามือถือ หรือค้นหาชื่อสถานที่ด้านบนแทนครับ');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
+      );
+    } catch (err) {
+      clearTimeout(maxWaitTimeout);
+      setIsLocating(false);
+    }
   };
 
   /**
-   * ค้นหาสถานที่ / ถนน / ชุมชน ในศรีสะเกษ
+   * ท่า 2: ค้นหาสถานที่ / ถนน / ชุมชน ในศรีสะเกษ (Instant 0ms Index)
    */
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
@@ -532,184 +520,309 @@ export default function ReportMapPicker({
       markerRef.current.setLatLng([item.lat, item.lng]);
     }
 
-    handlePositionUpdate(item.lat, item.lng);
+    updateManualPosition(item.lat, item.lng);
     setGpsStatusInfo({
       type: 'info',
       text: `📍 ปักหมุดที่: ${item.name} (อ.${item.district}) เรียบร้อยแล้ว`,
     });
   };
 
+  const handleDistrictJump = async (targetDistrictName: string) => {
+    const target = SISAKET_DISTRICTS.find((d) => d.name_th === targetDistrictName);
+    if (!target) return;
+
+    if (mapInstanceRef.current && markerRef.current) {
+      mapInstanceRef.current.flyTo([target.lat, target.lng], 14, { duration: 0.8 });
+      markerRef.current.setLatLng([target.lat, target.lng]);
+      const L = await import('leaflet');
+      updateActiveDistrictLayer(targetDistrictName, mapInstanceRef.current, L);
+    }
+
+    updateManualPosition(target.lat, target.lng);
+  };
+
   const isOutside = !isWithinSisaket(latitude, longitude);
 
   return (
     <div className="space-y-3">
-      {/* Search Bar for Places, Roads, and Villages in Sisaket */}
-      <div className="relative">
-        <div className="relative flex items-center">
-          <Search className="absolute left-3.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            onFocus={() => {
-              if (searchQuery.trim()) setShowDropdown(true);
-            }}
-            placeholder="🔍 ค้นหาชื่อสถานที่, ถนน, วัด, รพ., ชุมชน ในศรีสะเกษ..."
-            className="w-full rounded-2xl border border-stone-300 pl-10 pr-9 py-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50/80 shadow-sm"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSearchResults([]);
-                setShowDropdown(false);
-              }}
-              className="absolute right-3 rounded-full p-1 text-stone-400 hover:text-stone-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+      {/* 1. Main Report Form Location Card (Interactive Preview & Trigger) */}
+      <div className="rounded-2xl border-2 border-amber-300/80 bg-gradient-to-b from-amber-50/90 via-white to-stone-50 p-3.5 shadow-sm space-y-3">
+        {/* District & Status Headline */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-600 text-white shadow-md shadow-amber-600/30 shrink-0">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                ตำแหน่งจุดชำรุดที่เลือก
+              </span>
+              <h4 className="text-sm font-extrabold text-stone-900 truncate">
+                อ.{district || 'เมืองศรีสะเกษ'}
+              </h4>
+            </div>
+          </div>
+
+          <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[11px] font-bold text-purple-900 border border-purple-300 shrink-0">
+            🟣 22 อำเภอ
+          </span>
+        </div>
+
+        {/* GPS Coordinates Capsule */}
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-white p-2.5 text-xs text-stone-700 border border-stone-200 shadow-inner">
+          <div className="flex items-center gap-1.5 font-mono text-[11px] sm:text-xs text-stone-800 truncate">
+            <Compass className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+            <span className="font-semibold text-stone-500">พิกัด:</span>
+            <span className="font-bold text-amber-950 truncate">
+              {latitude.toFixed(5)}, {longitude.toFixed(5)}
+            </span>
+          </div>
+          {gpsAccuracyMeters && (
+            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+              ±{gpsAccuracyMeters}ม.
+            </span>
           )}
         </div>
 
-        {/* Autocomplete Search Dropdown */}
-        {showDropdown && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-2xl border border-stone-200 animate-fadeIn">
-            {searchResults.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectSearchResult(item)}
-                className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                  <span className="font-semibold truncate">{item.name}</span>
-                </div>
-                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full shrink-0 ml-2">
-                  อ.{item.district}
-                </span>
-              </button>
-            ))}
+        {/* Proximity Alert Warning Banner if duplicate */}
+        {nearbyWarning && (
+          <div className="flex items-start gap-2 rounded-xl bg-amber-500/15 border border-amber-500/40 p-2.5 text-xs text-amber-950 animate-fadeIn shadow-sm">
+            <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-amber-900">แจ้งเตือนจุดใกล้เคียง: </span>
+              <span>{nearbyWarning}</span>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Map Header with District Selector & GPS Button */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-stone-900 min-w-0 truncate">
-          <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
-          <span className="truncate">ระบุจุดชำรุด (22 อำเภอ)</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* Quick District Selector Dropdown */}
-          <div className="relative">
-            <select
-              value={district}
-              onChange={(e) => handleDistrictJump(e.target.value)}
-              aria-label="เลือกอำเภอ"
-              className="rounded-xl border border-purple-300 bg-purple-50/80 px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
-            >
-              {SISAKET_DISTRICTS.map((d) => (
-                <option key={d.id} value={d.name_th}>
-                  🟣 อ.{d.name_th}
-                </option>
-              ))}
-            </select>
+        {isOutside && (
+          <div className="flex items-start gap-2 rounded-xl bg-rose-50 border border-rose-300 p-2.5 text-xs text-rose-900 shadow-sm">
+            <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">อยู่นอกพื้นที่: </span>
+              <span>ระบบให้บริการเฉพาะภายใน 22 อำเภอ จ.ศรีสะเกษเท่านั้น</span>
+            </div>
           </div>
+        )}
 
-          <button
-            type="button"
-            onClick={handleGetLiveLocation}
-            disabled={isLocating}
-            className="flex items-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-400 px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95"
-          >
-            <Navigation className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
-            <span>{isLocating ? 'ค้นหา...' : 'พิกัดฉัน'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* GPS Status Banner */}
-      {gpsStatusInfo && (
-        <div
-          className={`flex items-start gap-2 rounded-2xl p-2.5 text-xs animate-fadeIn shadow-sm border ${
-            gpsStatusInfo.type === 'success'
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-              : gpsStatusInfo.type === 'warning'
-              ? 'bg-amber-50 border-amber-300 text-amber-900'
-              : 'bg-blue-50 border-blue-300 text-blue-900'
-          }`}
+        {/* Prominent Tap-to-Open Fullscreen Map Button */}
+        <button
+          type="button"
+          onClick={handleOpenMapModal}
+          className="w-full group relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 p-0.5 shadow-md shadow-amber-600/20 active:scale-[0.98] transition-all"
         >
-          <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-          <div className="flex-1">
-            <span className="font-medium leading-relaxed">{gpsStatusInfo.text}</span>
+          <div className="flex items-center justify-between rounded-[14px] bg-white px-4 py-3 text-stone-900 group-hover:bg-amber-50/50 transition-colors">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 group-hover:scale-110 transition-transform">
+                <Maximize2 className="h-4 w-4" />
+              </div>
+              <div className="text-left min-w-0">
+                <div className="text-xs sm:text-sm font-extrabold text-stone-900 flex items-center gap-1.5">
+                  <span>แตะเปิดแผนที่ระบุพิกัด (เต็มจอ)</span>
+                  <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-pulse shrink-0" />
+                </div>
+                <div className="text-[11px] text-stone-500 truncate">
+                  จับพิกัดดาวเทียมอัตโนมัติ • ปักหมุดอิสระ 22 อำเภอ
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm shrink-0 ml-2">
+              <span>เปิดแผนที่</span>
+              <CornerDownRight className="h-3.5 w-3.5" />
+            </div>
           </div>
-        </div>
-      )}
+        </button>
 
-      {/* Geo Error / GPS Blocked Guide */}
-      {geoError && (
-        <div className="flex items-start gap-2 rounded-2xl bg-rose-50 border border-rose-300 p-2.5 text-xs text-rose-800 shadow-sm animate-fadeIn">
-          <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-bold">แจ้งเตือนตำแหน่ง: </span>
-            <span>{geoError}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Proximity Alert Banner */}
-      {nearbyWarning && (
-        <div className="flex items-start gap-2 rounded-2xl bg-amber-500/15 border border-amber-500/40 p-3 text-xs text-amber-950 animate-fadeIn shadow-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-bold text-amber-900">แจ้งเตือนจุดใกล้เคียง: </span>
-            <span>{nearbyWarning}</span>
-          </div>
-        </div>
-      )}
-
-      {isOutside && !gpsStatusInfo && (
-        <div className="flex items-start gap-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 p-3 text-xs text-rose-900 shadow-sm">
-          <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-bold">อยู่นอกพื้นที่: </span>
-            <span>ระบบนี้ให้บริการเฉพาะภายใน 22 อำเภอ จังหวัดศรีสะเกษเท่านั้น</span>
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Map Container */}
-      <div className="relative overflow-hidden rounded-2xl border-2 border-purple-200/80 shadow-md bg-stone-100 h-64 w-full">
-        <div ref={mapContainerRef} className="h-full w-full z-0" />
-
-        {/* Real District Purple Boundary Badge Overlay */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-xl bg-purple-950/90 text-purple-100 px-2.5 py-1 text-[10px] sm:text-xs font-bold shadow-lg backdrop-blur-md border border-purple-400/60 max-w-[85%] truncate animate-fadeIn">
-          <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping shrink-0" />
-          <span className="truncate">🟣 เส้นเขตจริง: อ.{district || 'เมืองศรีสะเกษ'}</span>
-        </div>
-
-        {/* Floating Pin Helper Badge */}
-        <div className="absolute bottom-2 left-2 z-10 rounded-lg bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-stone-700 shadow-sm border border-stone-200/80 backdrop-blur-sm">
-          💡 แตะบนแผนที่หรือลากหมุดสีทองเพื่อระบุจุดชำรุด
+        {/* Guided Helper Note */}
+        <div className="flex items-center justify-between text-[11px] text-stone-500 px-1">
+          <span>💡 ท่า 1: ล็อก GPS อัตโนมัติ</span>
+          <span>ท่า 2: ลากหมุด/ค้นหาเอง</span>
         </div>
       </div>
 
-      {/* District & Location Tailwind Capsule */}
-      <div className="flex items-center justify-between gap-1 rounded-xl bg-purple-50/70 px-3.5 py-2 text-xs text-purple-950 border border-purple-200 shadow-sm">
-        <div className="flex items-center gap-1.5 min-w-0 truncate">
-          <Layers className="h-3.5 w-3.5 text-purple-700 shrink-0" />
-          <span className="text-purple-800 font-medium shrink-0">พื้นที่:</span>
-          <span className="font-bold text-purple-900 truncate">
-            อ.{district || 'เมืองศรีสะเกษ'}
-          </span>
+      {/* 2. Dedicated Fullscreen Map Modal (โหมดเปิด Map ในมือถือเต็มหน้าจอ) */}
+      {isMapModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-stone-900/95 backdrop-blur-md animate-fadeIn h-[100dvh] w-full">
+          {/* Top Sticky Header */}
+          <div className="flex items-center justify-between bg-stone-900 px-4 py-3 text-white border-b border-stone-800 shadow-md shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500 text-stone-950 font-bold shadow-md shrink-0">
+                <MapPin className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs sm:text-sm font-extrabold text-white truncate">
+                  ระบุพิกัดจุดชำรุด (22 อำเภอศรีสะเกษ)
+                </h3>
+                <p className="text-[10px] text-amber-400 truncate">
+                  อ.{selectedDistrict} • {selectedLat.toFixed(4)}, {selectedLng.toFixed(4)}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCloseMapModal}
+              className="flex items-center gap-1 rounded-xl bg-stone-800 hover:bg-stone-700 px-3 py-1.5 text-xs font-bold text-stone-300 transition-colors shrink-0 ml-2"
+              aria-label="ปิดแผนที่"
+            >
+              <X className="h-4 w-4" />
+              <span className="hidden sm:inline">ปิด</span>
+            </button>
+          </div>
+
+          {/* Search & Tool Ribbon */}
+          <div className="bg-stone-900/90 p-2.5 space-y-2 border-b border-stone-800 shrink-0 backdrop-blur-md">
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="relative flex items-center">
+                <Search className="absolute left-3.5 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => {
+                    if (searchQuery.trim()) setShowDropdown(true);
+                  }}
+                  placeholder="🔍 ค้นหาชื่อสถานที่, ถนน, วัด, รพ., ชุมชน ในศรีสะเกษ..."
+                  className="w-full rounded-2xl border border-stone-700 pl-10 pr-9 py-2 text-xs text-white placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-stone-800/90 shadow-inner"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults([]);
+                      setShowDropdown(false);
+                    }}
+                    className="absolute right-3 rounded-full p-1 text-stone-400 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Autocomplete Dropdown */}
+              {showDropdown && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-52 overflow-y-auto rounded-2xl bg-stone-800 p-1.5 shadow-2xl border border-stone-700 animate-fadeIn">
+                  {searchResults.map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSearchResult(item)}
+                      className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs hover:bg-amber-600/30 text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span className="font-semibold truncate">{item.name}</span>
+                      </div>
+                      <span className="text-[10px] text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full shrink-0 ml-2 border border-amber-800">
+                        อ.{item.district}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Actions Ribbon: 22 Districts Dropdown + GPS Button */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => handleDistrictJump(e.target.value)}
+                  aria-label="เลือกอำเภอ"
+                  className="w-full rounded-xl border border-purple-700/60 bg-purple-950/70 px-2.5 py-1.5 text-[11px] sm:text-xs font-bold text-purple-200 shadow-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30 cursor-pointer truncate"
+                >
+                  {SISAKET_DISTRICTS.map((d) => (
+                    <option key={d.id} value={d.name_th} className="bg-stone-900 text-white">
+                      🟣 อ.{d.name_th}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => triggerSatelliteGpsLock()}
+                disabled={isLocating}
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 px-3 py-1.5 text-xs font-bold text-stone-950 shadow-md transition-all active:scale-95 shrink-0"
+              >
+                <Navigation className={`h-3.5 w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
+                <span>{isLocating ? 'กำลังค้นหา...' : '🛰️ จับพิกัด GPS'}</span>
+              </button>
+            </div>
+
+            {/* Status Banner */}
+            {gpsStatusInfo && (
+              <div
+                className={`flex items-start gap-2 rounded-xl p-2 text-xs animate-fadeIn shadow-sm border ${
+                  gpsStatusInfo.type === 'success'
+                    ? 'bg-emerald-950/80 border-emerald-600 text-emerald-200'
+                    : gpsStatusInfo.type === 'warning'
+                    ? 'bg-amber-950/80 border-amber-600 text-amber-200'
+                    : 'bg-blue-950/80 border-blue-600 text-blue-200'
+                }`}
+              >
+                <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+                <span className="font-medium leading-tight">{gpsStatusInfo.text}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Map Viewport Area */}
+          <div className="relative flex-1 w-full bg-stone-900 overflow-hidden">
+            <div ref={mapContainerRef} className="h-full w-full z-0" />
+
+            {/* Overlay District Badge */}
+            <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-xl bg-purple-950/90 text-purple-100 px-3 py-1.5 text-xs font-bold shadow-xl backdrop-blur-md border border-purple-400/60 max-w-[85%] truncate">
+              <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping shrink-0" />
+              <span className="truncate">🟣 เส้นเขตจริง: อ.{selectedDistrict}</span>
+            </div>
+
+            {/* Helper Floating Pin Badge */}
+            <div className="absolute top-2 right-2 z-10 rounded-xl bg-stone-900/90 px-2.5 py-1 text-[11px] font-semibold text-amber-300 shadow-lg border border-stone-700 backdrop-blur-md">
+              💡 แตะบนแผนที่หรือลากหมุดเพื่อเลื่อน
+            </div>
+          </div>
+
+          {/* Sticky Bottom Action Panel */}
+          <div className="bg-stone-900 border-t border-stone-800 p-3 sm:p-4 shadow-2xl shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 safe-bottom">
+            <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-white truncate">
+                  อ.{selectedDistrict}
+                </div>
+                <div className="text-[11px] font-mono text-amber-400 truncate">
+                  ละติจูด {selectedLat.toFixed(5)}, ลองจิจูด {selectedLng.toFixed(5)}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleCloseMapModal}
+                className="flex-1 sm:flex-initial rounded-2xl bg-stone-800 hover:bg-stone-700 px-4 py-3 text-xs font-bold text-stone-300 transition-colors"
+              >
+                ยกเลิก
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmLocation}
+                className="flex-[2] sm:flex-initial flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 px-6 py-3 text-xs sm:text-sm font-extrabold text-white shadow-xl shadow-amber-600/30 active:scale-[0.98] transition-all"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>✅ ยืนยันตำแหน่งนี้ (บันทึกพิกัด)</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <span className="text-[10px] text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-full font-medium shrink-0">
-          ขอบเขต 22 อำเภอ
-        </span>
-      </div>
+      )}
     </div>
   );
 }
