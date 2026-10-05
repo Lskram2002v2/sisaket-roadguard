@@ -194,17 +194,9 @@ export default function PublicMapFeed() {
             <Filter className="h-4 w-4 text-amber-600" />
             <span>กรองตาม 22 อำเภอ ({filteredReports.length} จุด)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            {isLoading && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium animate-pulse">
-                <Sparkles className="h-3 w-3 animate-spin text-amber-600" />
-                <span>กำลังซิงค์สด...</span>
-              </span>
-            )}
-            <span className="text-[11px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-              🟣 เส้นแบ่งเขตจริง
-            </span>
-          </div>
+          <span className="text-[11px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+            🟣 ขอบเขตจริง
+          </span>
         </div>
 
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
@@ -314,11 +306,8 @@ export default function PublicMapFeed() {
                   className="h-16 w-24 rounded-xl object-cover border border-stone-200"
                 />
                 <div className="flex flex-col justify-between text-[11px] text-stone-600 py-0.5 font-medium">
-                  <div>
-                    <span>ผู้แจ้ง: {maskPhone(rep.reporter_phone)}</span>
-                  </div>
-                  <div className="text-[10px] text-stone-400">
-                    {new Date(rep.created_at).toLocaleDateString('th-TH')}
+                  <div className="text-[10px] text-stone-500 font-mono">
+                    แจ้งเมื่อ: {new Date(rep.created_at).toLocaleDateString('th-TH')}
                   </div>
                 </div>
               </div>

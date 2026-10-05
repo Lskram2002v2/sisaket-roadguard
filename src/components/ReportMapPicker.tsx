@@ -437,18 +437,18 @@ export default function ReportMapPicker({
         </div>
       </div>
 
-      {/* District & Coordinates Tailwind Capsule */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-xl bg-purple-50/70 px-3 py-2 text-xs text-purple-950 border border-purple-200 shadow-sm">
+      {/* District & Location Tailwind Capsule */}
+      <div className="flex items-center justify-between gap-1 rounded-xl bg-purple-50/70 px-3.5 py-2 text-xs text-purple-950 border border-purple-200 shadow-sm">
         <div className="flex items-center gap-1.5 min-w-0 truncate">
           <Layers className="h-3.5 w-3.5 text-purple-700 shrink-0" />
-          <span className="text-purple-800 font-medium shrink-0">ขอบเขต:</span>
-          <span className="font-black text-purple-900 truncate">
+          <span className="text-purple-800 font-medium shrink-0">พื้นที่:</span>
+          <span className="font-bold text-purple-900 truncate">
             อ.{district || 'เมืองศรีสะเกษ'}
           </span>
         </div>
-        <div className="text-[10px] sm:text-[11px] text-purple-700 shrink-0 font-mono font-bold">
-          {latitude.toFixed(4)}, {longitude.toFixed(4)}
-        </div>
+        <span className="text-[10px] text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-full font-medium shrink-0">
+          ขอบเขต 22 อำเภอ
+        </span>
       </div>
     </div>
   );

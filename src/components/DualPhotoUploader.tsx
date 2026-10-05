@@ -130,7 +130,7 @@ export default function DualPhotoUploader({
           <Camera className="h-4 w-4 text-amber-600" />
           <span>แนบรูปถ่าย 2 รูป <span className="text-amber-700 text-xs font-normal">(บังคับ)</span></span>
         </div>
-        <span className="text-[11px] text-stone-500">บีบอัดอัตโนมัติ &lt;250KB</span>
+        <span className="text-[11px] text-amber-800 font-medium">📸 ถ่ายสด หรือ 🖼️ เลือกรูปในเครื่อง</span>
       </div>
 
       {errorMsg && (
@@ -196,13 +196,13 @@ export default function DualPhotoUploader({
               </div>
               <span className="text-xs font-semibold text-stone-800">1. ภาพมุมกว้าง</span>
               <span className="text-[10px] text-stone-500 mt-0.5 leading-tight px-1">
-                เห็นถนน / เสาไฟ / ป้ายบอกทาง
+                เห็นถนน / เสาไฟ / ป้ายทาง
               </span>
+              <span className="text-[9px] text-amber-700 font-medium mt-1">แตะเพื่อถ่ายรูปหรือเลือกไฟล์</span>
               <input
                 ref={contextInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 onChange={(e) => handleFileChange(e, 'context')}
               />
@@ -255,11 +255,11 @@ export default function DualPhotoUploader({
               <span className="text-[10px] text-stone-500 mt-0.5 leading-tight px-1">
                 เห็นตัวหลุม / ความลึกชัดเจน
               </span>
+              <span className="text-[9px] text-amber-700 font-medium mt-1">แตะเพื่อถ่ายรูปหรือเลือกไฟล์</span>
               <input
                 ref={closeupInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 onChange={(e) => handleFileChange(e, 'closeup')}
               />

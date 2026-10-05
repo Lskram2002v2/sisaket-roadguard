@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MapPin, Search, Map as MapIcon, PlusCircle, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { MapPin, Search, Map as MapIcon, PlusCircle, Sparkles, ShieldCheck } from 'lucide-react';
 import SisaketHeader from '@/components/SisaketHeader';
 import CitizenReportForm from '@/components/CitizenReportForm';
 import CitizenTrackingPortal from '@/components/CitizenTrackingPortal';
@@ -96,13 +97,22 @@ export default function HomePage() {
       />
 
       {/* Footer Branding */}
-      <footer className="mt-auto border-t border-stone-200/80 py-4 text-center text-xs text-stone-500 bg-stone-50/50">
+      <footer className="mt-auto border-t border-stone-200/80 py-5 text-center text-xs text-stone-500 bg-stone-50/50 space-y-2">
         <p className="font-medium text-stone-700">
           🌸 Sisaket RoadGuard • ศรีสะเกษ ถนนสวย ปลอดภัย ไร้หลุม
         </p>
-        <p className="text-[11px] text-stone-400 mt-0.5">
+        <p className="text-[11px] text-stone-400">
           ครอบคลุมพื้นที่ 22 อำเภอ • แขวงทางหลวงศรีสะเกษ & อบจ.ศรีสะเกษ
         </p>
+        <div className="pt-2">
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-400 hover:text-amber-700 transition-colors"
+          >
+            <ShieldCheck className="h-3 w-3" />
+            <span>เข้าสู่ระบบสำหรับเจ้าหน้าที่</span>
+          </Link>
+        </div>
       </footer>
     </main>
   );

@@ -168,14 +168,6 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
           </div>
         </div>
 
-        {/* Live Sync Status Indicator */}
-        {isLoading && (
-          <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-amber-800 bg-amber-50/90 border border-amber-200/80 py-1.5 px-3 rounded-xl animate-pulse">
-            <Sparkles className="h-3.5 w-3.5 animate-spin text-amber-600" />
-            <span>กำลังซิงค์ข้อมูลสดจากระบบคลาวด์...</span>
-          </div>
-        )}
-
         {/* Search Input Box */}
         {activeTab === 'search' && (
           <form onSubmit={handleSearch} className="flex gap-2 pt-1 animate-fadeIn">
