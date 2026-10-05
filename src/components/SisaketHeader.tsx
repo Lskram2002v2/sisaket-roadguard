@@ -110,7 +110,7 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
               idx === activeSlideIndex ? 'opacity-40 scale-105' : 'opacity-0 scale-100'
             }`}
             style={{
-              backgroundImage: `url(${item.img})`,
+              backgroundImage: `url(${item.img}), url(${SISAKET_LANDMARKS[0].img})`,
               transitionProperty: 'opacity, transform',
             }}
           />

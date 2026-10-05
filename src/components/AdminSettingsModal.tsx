@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Settings,
@@ -17,11 +17,20 @@ import {
   ExternalLink,
   Edit3,
   Save,
-  RotateCcw,
+  Upload,
+  AlertTriangle,
+  Info,
+  HelpCircle,
+  FileImage,
 } from 'lucide-react';
 import { SponsorBanner, HeaderThemeConfig } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
-import { normalizeImageUrl } from '@/lib/image-helper';
+import {
+  normalizeImageUrl,
+  isGoogleDriveUrl,
+  getGoogleDriveThumbnailUrl,
+  FALLBACK_BANNER_IMAGE,
+} from '@/lib/image-helper';
 
 interface AdminSettingsModalProps {
   isOpen: boolean;
@@ -29,7 +38,7 @@ interface AdminSettingsModalProps {
 }
 
 export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'banners' | 'header'>('banners');
+  const [activeTab, setActiveTab] = useState<'banners' | 'header' | 'guide'>('banners');
 
   // Banners State
   const [banners, setBanners] = useState<SponsorBanner[]>([]);
@@ -40,7 +49,14 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
   const [newTargetLink, setNewTargetLink] = useState('');
   const [newIsActive, setNewIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const [imageLoadedSuccess, setImageLoadedSuccess] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // File Input Refs
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
+  const headerFileInputRef = useRef<HTMLInputElement>(null);
 
   // Header Theme State
   const [themeConfig, setThemeConfig] = useState<HeaderThemeConfig>({
@@ -51,6 +67,7 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     updated_at: new Date().toISOString(),
   });
   const [customImageInput, setCustomImageInput] = useState('');
+  const [headerImageLoadError, setHeaderImageLoadError] = useState(false);
 
   const loadAllSettings = async () => {
     const loadedBanners = await roadStore.getAllBanners();
@@ -72,14 +89,81 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     setSuccessMsg(msg);
     setTimeout(() => {
       setSuccessMsg(null);
-    }, 3000);
+    }, 3500);
+  };
+
+  /**
+   * บีบอัดไฟล์ภาพจากเครื่องเป็น WebP/DataURL อัตโนมัติ (ไม่เกิน 200KB)
+   */
+  const handleLocalFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: 'banner' | 'header'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพ (JPG, PNG, WEBP, GIF) เท่านั้น');
+      return;
+    }
+
+    setIsCompressing(true);
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1280;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/webp', 0.85);
+
+          if (target === 'banner') {
+            setNewImageUrl(dataUrl);
+            setImageLoadError(false);
+            setImageLoadedSuccess(true);
+            showFeedback('📁 นำเข้ารูปภาพจากอุปกรณ์สำเร็จ (พร้อมแสดงผลทันที)');
+          } else {
+            const existing = themeConfig.custom_images || [];
+            const updated = [...existing, dataUrl];
+            handleSaveTheme({ custom_images: updated, mode: 'custom' });
+            showFeedback('📁 เพิ่มรูปพื้นหลังส่วนบนจากอุปกรณ์สำเร็จ');
+          }
+        }
+        setIsCompressing(false);
+      };
+      img.src = event.target?.result as string;
+    };
+
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Add or Edit Banner
   const handleSaveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newImageUrl.trim()) {
-      alert('กรุณากรอก URL รูปภาพ หรือลิงก์ Google Drive');
+      alert('กรุณากรอก URL รูปภาพ หรือเลือกไฟล์จากอุปกรณ์');
       return;
     }
 
@@ -87,7 +171,6 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     const normalizedUrl = normalizeImageUrl(newImageUrl);
 
     if (editingBannerId) {
-      // Update existing
       await roadStore.saveBanner({
         id: editingBannerId,
         title: newTitle.trim() || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
@@ -99,7 +182,6 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
       });
       showFeedback('✅ อัปเดตป้ายประชาสัมพันธ์เรียบร้อย');
     } else {
-      // Create new
       await roadStore.saveBanner({
         title: newTitle.trim() || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
         subtitle: newSubtitle.trim() || undefined,
@@ -118,6 +200,8 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     setNewImageUrl('');
     setNewTargetLink('');
     setNewIsActive(true);
+    setImageLoadError(false);
+    setImageLoadedSuccess(false);
     setIsSaving(false);
 
     await loadAllSettings();
@@ -130,7 +214,8 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     setNewImageUrl(banner.image_url);
     setNewTargetLink(banner.target_link || '');
     setNewIsActive(banner.is_active);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setImageLoadError(false);
+    setImageLoadedSuccess(false);
   };
 
   const handleCancelEdit = () => {
@@ -140,6 +225,8 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
     setNewImageUrl('');
     setNewTargetLink('');
     setNewIsActive(true);
+    setImageLoadError(false);
+    setImageLoadedSuccess(false);
   };
 
   const handleDeleteBanner = async (id: string, title: string) => {
@@ -183,12 +270,15 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
       handleSaveTheme({ custom_images: updatedImages, mode: 'custom' });
     }
     setCustomImageInput('');
+    setHeaderImageLoadError(false);
   };
 
   const handleRemoveCustomHeaderImage = (urlToRemove: string) => {
     const updatedImages = (themeConfig.custom_images || []).filter((u) => u !== urlToRemove);
     handleSaveTheme({ custom_images: updatedImages });
   };
+
+  const isDriveUrlInput = isGoogleDriveUrl(newImageUrl);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-md animate-fadeIn">
@@ -224,7 +314,7 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
             }`}
           >
             <ImageIcon className="h-3.5 w-3.5" />
-            <span>ป้ายสปอนเซอร์ด้านล่าง ({banners.length})</span>
+            <span>ป้ายสปอนเซอร์ ({banners.length})</span>
           </button>
 
           <button
@@ -236,7 +326,19 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
             }`}
           >
             <Layers className="h-3.5 w-3.5" />
-            <span>พื้นหลังส่วนบน (Header)</span>
+            <span>พื้นหลังส่วนบน</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('guide')}
+            className={`flex items-center gap-1.5 border-b-2 py-2.5 px-3 text-xs font-bold transition-all ${
+              activeTab === 'guide'
+                ? 'border-amber-400 text-amber-300'
+                : 'border-transparent text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>วิธีใส่รูปลิงก์ Google</span>
           </button>
         </div>
 
@@ -271,40 +373,123 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
                   )}
                 </div>
 
+                {/* Option 1: Direct File Upload from Computer/Phone */}
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                        <Upload className="h-4 w-4" />
+                        <span>วิธีที่ 1: อัปโหลดรูปจากเครื่อง (แนะนำ สะดวกที่สุด ไม่ต้องเปิดแชร์)</span>
+                      </div>
+                      <p className="text-[10px] text-stone-300 mt-0.5">
+                        ระบบจะบีบอัดภาพให้อัตโนมัติ แสดงผลคมชัดและโหลดไว 0ms
+                      </p>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={bannerFileInputRef}
+                      onChange={(e) => handleLocalFileUpload(e, 'banner')}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={isCompressing}
+                      onClick={() => bannerFileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 px-3 py-1.5 text-xs font-bold shadow-md transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                    >
+                      <FileImage className="h-3.5 w-3.5" />
+                      <span>{isCompressing ? 'กำลังแปลงรูป...' : '📁 เลือกรูปจากเครื่อง'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSaveBanner} className="space-y-3">
-                  {/* Image URL Input with Google Drive Support */}
+                  {/* Option 2: Image URL / Google Drive Input */}
                   <div>
                     <label className="block text-[11px] font-semibold text-stone-300 mb-1">
-                      URL รูปภาพ หรือ ลิงก์ Google Drive <span className="text-rose-400">*</span>
+                      วิธีที่ 2: วาง URL รูปภาพ หรือ ลิงก์ Google Drive <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="วางลิงก์รูปภาพ เช่น https://drive.google.com/file/d/... หรือ URL รูปภาพ"
+                      placeholder="วางลิงก์ เช่น https://drive.google.com/file/d/... หรือ URL รูปภาพ"
                       value={newImageUrl}
-                      onChange={(e) => setNewImageUrl(e.target.value)}
-                      className="w-full rounded-xl bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-white placeholder-stone-500 focus:border-amber-400 focus:outline-none"
+                      onChange={(e) => {
+                        setNewImageUrl(e.target.value);
+                        setImageLoadError(false);
+                        setImageLoadedSuccess(false);
+                      }}
+                      className="w-full rounded-xl bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-white placeholder-stone-500 focus:border-amber-400 focus:outline-none font-mono"
                       required
                     />
-                    <p className="text-[10px] text-stone-400 mt-1">
-                      💡 รองรับลิงก์ Google Drive ทันที โดยระบบจะแปลงเป็น direct image URL ให้อัตโนมัติ
-                    </p>
+
+                    {/* Google Drive Detection Callout */}
+                    {isDriveUrlInput && (
+                      <div className="mt-1.5 rounded-lg bg-blue-950/60 border border-blue-500/40 p-2 text-[10px] text-blue-200 flex items-start gap-1.5">
+                        <Info className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>ตรวจพบลิงก์ Google Drive:</strong> ระบบแปลงเป็น Direct View ให้อัตโนมัติ — 
+                          <em> กรุณาตรวจสอบว่าได้ตั้งค่าสิทธิ์ใน Google Drive เป็น <strong>"ทุกคนที่มีลิงก์ (Anyone with the link)"</strong> แล้ว</em>
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Live Thumbnail Preview if URL is entered */}
+                  {/* Live Thumbnail Preview with Verification */}
                   {newImageUrl && (
-                    <div className="rounded-xl overflow-hidden border border-stone-700 bg-stone-900 p-2">
-                      <span className="text-[10px] text-stone-400 block mb-1">ตัวอย่างรูปภาพ:</span>
-                      <div className="relative h-24 w-full rounded-lg overflow-hidden bg-black/40">
+                    <div className="rounded-xl overflow-hidden border border-stone-700 bg-stone-900 p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-stone-400 font-semibold">ตัวอย่างรูปภาพจริง:</span>
+                        {imageLoadedSuccess && (
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> รูปภาพพร้อมแสดงผล
+                          </span>
+                        )}
+                        {imageLoadError && (
+                          <span className="text-rose-400 font-bold flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> โหลดรูปไม่สำเร็จ
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="relative h-28 w-full rounded-lg overflow-hidden bg-black/60 border border-stone-800">
                         <img
                           src={normalizeImageUrl(newImageUrl)}
                           alt="Preview"
                           className="h-full w-full object-cover"
+                          onLoad={() => {
+                            setImageLoadedSuccess(true);
+                            setImageLoadError(false);
+                          }}
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1000&auto=format&fit=crop&q=80';
+                            setImageLoadError(true);
+                            setImageLoadedSuccess(false);
+                            const target = e.target as HTMLImageElement;
+                            const thumb = getGoogleDriveThumbnailUrl(newImageUrl);
+                            if (target.src !== thumb && thumb !== target.src) {
+                              target.src = thumb;
+                            } else {
+                              target.src = FALLBACK_BANNER_IMAGE;
+                            }
                           }}
                         />
                       </div>
+
+                      {/* Error Warning & Advice */}
+                      {imageLoadError && (
+                        <div className="rounded-lg bg-rose-950/70 border border-rose-600/50 p-2 text-[10px] text-rose-200 space-y-1">
+                          <p className="font-bold flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                            รูปภาพไม่แสดงผล (HTTP 403 Forbidden หรือ ลิงก์ไม่ถูกต้อง)
+                          </p>
+                          <ul className="list-disc list-inside space-y-0.5 text-stone-300">
+                            <li>หากเป็น Google Drive: ไฟล์ยังถูกตั้งค่าเป็น "จำกัด (Restricted)" ให้ไปที่ Google Drive กดแชร์ แล้วเปลี่ยนเป็น <strong>"ทุกคนที่มีลิงก์"</strong></li>
+                            <li>หรือกดปุ่ม <strong>"📁 เลือกรูปจากเครื่อง"</strong> ด้านบนเพื่ออัปโหลดตรงได้ทันที</li>
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -364,7 +549,7 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
 
                     <button
                       type="submit"
-                      disabled={isSaving}
+                      disabled={isSaving || isCompressing}
                       className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-4 py-2 text-xs font-bold text-stone-950 shadow-md hover:from-amber-400 hover:to-amber-300 transition-all disabled:opacity-50"
                     >
                       {editingBannerId ? (
@@ -411,8 +596,7 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
                             alt={item.title}
                             className="h-full w-full object-cover"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1000&auto=format&fit=crop&q=80';
+                              (e.target as HTMLImageElement).src = FALLBACK_BANNER_IMAGE;
                             }}
                           />
                           {!item.is_active && (
@@ -536,24 +720,46 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
                   >
                     <ImageIcon className="h-5 w-5 text-amber-400 mb-1" />
                     <span className="text-xs">รูปภาพกำหนดเอง (Custom URLs)</span>
-                    <span className="text-[10px] text-stone-400 mt-0.5">ใส่ลิงก์ Google Drive หรือ Web URL</span>
+                    <span className="text-[10px] text-stone-400 mt-0.5">ใส่ลิงก์ Google Drive หรือเลือกจากเครื่อง</span>
                   </button>
                 </div>
 
                 {/* Custom Images Input Section if Custom Mode */}
                 {themeConfig.mode === 'custom' && (
                   <div className="space-y-3 pt-2 border-t border-stone-800">
+                    {/* Device Upload for Header */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <div className="text-[11px] text-amber-300 font-semibold flex items-center gap-1.5">
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>เพิ่มภาพจากเครื่อง</span>
+                      </div>
+                      <input
+                        type="file"
+                        ref={headerFileInputRef}
+                        onChange={(e) => handleLocalFileUpload(e, 'header')}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => headerFileInputRef.current?.click()}
+                        className="rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 px-3 py-1 text-xs font-bold transition-all"
+                      >
+                        📁 เลือกไฟล์
+                      </button>
+                    </div>
+
                     <div>
                       <label className="block text-[11px] font-semibold text-stone-300 mb-1">
-                        เพิ่มรูปภาพพื้นหลังส่วนบน (URL หรือ ลิงก์ Google Drive)
+                        หรือ วาง URL รูปภาพ / ลิงก์ Google Drive
                       </label>
                       <div className="flex gap-2">
                         <input
                           type="text"
-                          placeholder="วาง URL รูปภาพ เช่น https://drive.google.com/..."
+                          placeholder="วาง URL เช่น https://drive.google.com/..."
                           value={customImageInput}
                           onChange={(e) => setCustomImageInput(e.target.value)}
-                          className="flex-1 rounded-xl bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-white placeholder-stone-500 focus:border-amber-400 focus:outline-none"
+                          className="flex-1 rounded-xl bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-white placeholder-stone-500 focus:border-amber-400 focus:outline-none font-mono"
                         />
                         <button
                           type="button"
@@ -580,11 +786,11 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {themeConfig.custom_images.map((url, idx) => (
                             <div key={idx} className="relative group rounded-xl overflow-hidden h-20 border border-stone-700 bg-black">
-                              <img src={url} alt={`Header ${idx + 1}`} className="h-full w-full object-cover" />
+                              <img src={normalizeImageUrl(url)} alt={`Header ${idx + 1}`} className="h-full w-full object-cover" />
                               <button
                                 type="button"
                                 onClick={() => handleRemoveCustomHeaderImage(url)}
-                                className="absolute top-1 right-1 rounded-full bg-rose-600/90 text-white p-1 hover:bg-rose-500 transition-all"
+                                className="absolute top-1 right-1 rounded-full bg-rose-600/90 text-white p-1 hover:bg-rose-500 transition-all shadow-md"
                                 title="ลบรูปนี้"
                               >
                                 <X className="h-3 w-3" />
@@ -619,6 +825,47 @@ export default function AdminSettingsModal({ isOpen, onClose }: AdminSettingsMod
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB 3: GUIDE ================= */}
+          {activeTab === 'guide' && (
+            <div className="space-y-4 rounded-2xl bg-stone-950/70 border border-stone-800 p-4 text-xs text-stone-300">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                <Info className="h-4 w-4" />
+                <span>คู่มือการใช้งานรูปภาพ & วิเคราะห์ปัญหาที่พบบ่อย</span>
+              </div>
+
+              <div className="space-y-3 leading-relaxed">
+                <div className="rounded-xl bg-stone-900 p-3 border border-stone-800 space-y-1.5">
+                  <h5 className="font-bold text-white text-xs">1. วิธีแก้ปัญหารูปจาก Google Drive ไม่แสดงผล (403 Forbidden)</h5>
+                  <p className="text-[11px] text-stone-300">
+                    Google Drive มีระบบความปลอดภัย หากอัปโหลดแล้วแชร์ทันที ค่าเริ่มต้นจะถูกตั้งเป็น <strong>"จำกัด (Restricted)"</strong> ทำให้คนทั่วไปไม่สามารถเห็นภาพได้
+                  </p>
+                  <div className="rounded-lg bg-black/50 p-2 text-[11px] text-amber-300 space-y-1">
+                    <p><strong>ขั้นตอนการเปิดสิทธิ์ใน Google Drive:</strong></p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-stone-200">
+                      <li>คลิกขวาที่ไฟล์รูปใน Google Drive เลือก <strong>"แชร์ (Share)"</strong></li>
+                      <li>ในหัวข้อ "การเข้าถึงทั่วไป (General access)" เปลี่ยนจาก "จำกัด" เป็น <strong>"ทุกคนที่มีลิงก์ (Anyone with the link)"</strong></li>
+                      <li>กด <strong>"คัดลอกลิงก์ (Copy link)"</strong> แล้วนำมาวางในระบบได้ทันที</li>
+                    </ol>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-stone-900 p-3 border border-stone-800 space-y-1.5">
+                  <h5 className="font-bold text-white text-xs">2. แนะนำ: ใช้วิธี "เลือกรูปจากเครื่อง" ง่ายที่สุด</h5>
+                  <p className="text-[11px] text-stone-300">
+                    หากไม่อยากตั้งค่า Google Drive ให้กดปุ่ม <strong>"📁 เลือกรูปจากเครื่อง"</strong> ระบบจะแปลงภาพและบันทึกลงในระบบทันที ไม่ต้องมีโฮสต์ภายนอก
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-stone-900 p-3 border border-stone-800 space-y-1.5">
+                  <h5 className="font-bold text-white text-xs">3. รูปภาพจาก Google Search (Google Images)</h5>
+                  <p className="text-[11px] text-stone-300">
+                    หากค้นหารูปใน Google ให้คลิกขวาที่ภาพแล้วเลือก <strong>"คัดลอกที่อยู่รูปภาพ (Copy Image Address)"</strong> (อย่าเลือก Copy Link Address เพราะจะได้ลิงก์หน้าเว็บแทนไฟล์รูป)
+                  </p>
                 </div>
               </div>
             </div>

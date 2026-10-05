@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SponsorBanner } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
-import { normalizeImageUrl } from '@/lib/image-helper';
+import { normalizeImageUrl, getGoogleDriveThumbnailUrl, FALLBACK_BANNER_IMAGE } from '@/lib/image-helper';
 import { ExternalLink, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function SponsorBannerCarousel() {
@@ -43,8 +43,6 @@ export default function SponsorBannerCarousel() {
 
   if (banners.length === 0) return null;
 
-  const currentBanner = banners[currentIndex] || banners[0];
-
   const handleNext = () => {
     setCurrentIndex((prev) => (prev + 1) % banners.length);
   };
@@ -61,10 +59,8 @@ export default function SponsorBannerCarousel() {
     if (touchStartXRef.current === null) return;
     const diff = touchStartXRef.current - e.changedTouches[0].clientX;
     if (diff > 40) {
-      // Swiped Left
       handleNext();
     } else if (diff < -40) {
-      // Swiped Right
       handlePrev();
     }
     touchStartXRef.current = null;
@@ -109,9 +105,13 @@ export default function SponsorBannerCarousel() {
                 alt={item.title}
                 className="h-full w-full object-cover object-center"
                 onError={(e) => {
-                  // Fallback if image fails to load
-                  (e.target as HTMLImageElement).src =
-                    'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1000&auto=format&fit=crop&q=80';
+                  const target = e.target as HTMLImageElement;
+                  const thumbUrl = getGoogleDriveThumbnailUrl(item.image_url);
+                  if (target.src !== thumbUrl && thumbUrl !== target.src) {
+                    target.src = thumbUrl;
+                  } else {
+                    target.src = FALLBACK_BANNER_IMAGE;
+                  }
                 }}
               />
 
