@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { HeaderThemeConfig } from '@/lib/types';
+import { isAuthorized } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ const DEFAULT_THEME: HeaderThemeConfig = {
 
 /**
  * GET /api/settings
- * ดึงการตั้งค่าระบบ (เช่น header_theme)
+ * ดึงการตั้งค่าระบบ (Public Read)
  */
 export async function GET(req: Request) {
   try {
@@ -42,9 +43,16 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/settings
- * อัปเดตการตั้งค่าระบบลงในตาราง system_settings
+ * อัปเดตการตั้งค่าระบบ (Protected - ต้องมีสิทธิ์ Admin)
  */
 export async function POST(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: เฉพาะเจ้าหน้าที่ผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขการตั้งค่าได้' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { key, value } = body;

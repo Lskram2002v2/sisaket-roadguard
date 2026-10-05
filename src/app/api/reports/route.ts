@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RoadReport, SeverityLevel } from '@/lib/types';
 import { isWithinSisaket } from '@/lib/geofence';
+import { isAuthorized, maskPhoneNumber, sanitizeString, checkRateLimit, getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/reports
- * ดึงรายการรายงานทั้งหมด หรือค้นหาตาม tracking_code, phone, district
+ * ดึงรายการรายงานทั้งหมด (PDPA Protected: บุคคลทั่วไปจะเห็นเบอร์ที่ถูก Mask เช่น 081-XXX-5678)
  */
 export async function GET(req: Request) {
   try {
+    const isAdmin = isAuthorized(req);
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('tracking_code');
     const phone = searchParams.get('phone');
@@ -31,7 +33,13 @@ export async function GET(req: Request) {
 
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        return NextResponse.json({ success: true, source: 'database', data });
+        // PDPA Compliance: ถ้าไม่ใช่แอดมิน ให้ Mask เบอร์โทรศัพท์ทั้งหมด
+        const sanitizedData = data.map((report) => ({
+          ...report,
+          reporter_phone: isAdmin ? report.reporter_phone : maskPhoneNumber(report.reporter_phone),
+        }));
+
+        return NextResponse.json({ success: true, source: 'database', data: sanitizedData });
       }
     }
 
@@ -44,9 +52,20 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/reports
- * สร้างรายงานถนนชำรุดใหม่
+ * สร้างรายงานถนนชำรุดใหม่ (Rate Limited + Strict Validation)
  */
 export async function POST(req: Request) {
+  const clientIp = getClientIp(req);
+
+  // Rate Limit: 10 reports per 10 minutes per IP
+  const rateLimit = checkRateLimit(`report:${clientIp}`, 10, 10 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'คุณส่งรายงานบ่อยเกินไป กรุณารอสักครู่ก่อนส่งข้อมูลใหม่' },
+      { status: 429 }
+    );
+  }
+
   try {
     const body = await req.json();
     const {
@@ -63,7 +82,9 @@ export async function POST(req: Request) {
     } = body;
 
     // Validation
-    if (!latitude || !longitude || !isWithinSisaket(latitude, longitude)) {
+    const latNum = parseFloat(latitude);
+    const lngNum = parseFloat(longitude);
+    if (isNaN(latNum) || isNaN(lngNum) || !isWithinSisaket(latNum, lngNum)) {
       return NextResponse.json(
         { success: false, error: 'พิกัดอยู่นอกพื้นที่ 22 อำเภอ จังหวัดศรีสะเกษ' },
         { status: 400 }
@@ -72,18 +93,29 @@ export async function POST(req: Request) {
 
     if (!photo_context_url || !photo_closeup_url) {
       return NextResponse.json(
-        { success: false, error: 'กรุณาแนบรูปภาพให้ครบทั้ง 2 รูป' },
+        { success: false, error: 'กรุณาแนบรูปภาพให้ครบทั้ง 2 รูป (ภาพมุมกว้าง และ ภาพระยะใกล้)' },
         { status: 400 }
       );
     }
 
     const cleanPhone = (reporter_phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10) {
+    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
       return NextResponse.json(
-        { success: false, error: 'กรุณากรอกเบอร์โทรศัพท์ติดต่อ 10 หลักที่ถูกต้อง' },
+        { success: false, error: 'กรุณากรอกเบอร์โทรศัพท์ติดต่อ 10 หลักที่ถูกต้อง (เช่น 0812345678)' },
         { status: 400 }
       );
     }
+
+    const landmarkClean = sanitizeString(landmark_description, 500);
+    if (!landmarkClean || landmarkClean.length < 5) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณาระบุจุดสังเกตหรือสถานที่ใกล้เคียงอย่างน้อย 5 ตัวอักษร' },
+        { status: 400 }
+      );
+    }
+
+    const validSeverities: SeverityLevel[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+    const safeSeverity = validSeverities.includes(severity_level) ? severity_level : 'MEDIUM';
 
     const trackingCodePreview = `SK${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}`;
     const generatedCode = tracking_code || `${trackingCodePreview}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -92,14 +124,14 @@ export async function POST(req: Request) {
       id: `rep-${Date.now().toString(36)}`,
       tracking_code: generatedCode,
       reporter_phone: cleanPhone,
-      latitude,
-      longitude,
-      district: district || 'เมืองศรีสะเกษ',
-      subdistrict: subdistrict || undefined,
-      landmark_description: (landmark_description || '').trim(),
+      latitude: latNum,
+      longitude: lngNum,
+      district: sanitizeString(district, 100) || 'เมืองศรีสะเกษ',
+      subdistrict: subdistrict ? sanitizeString(subdistrict, 100) : undefined,
+      landmark_description: landmarkClean,
       photo_context_url,
       photo_closeup_url,
-      severity_level: (severity_level as SeverityLevel) || 'MEDIUM',
+      severity_level: safeSeverity,
       status: 'PENDING',
       upvote_count: 1,
       created_at: new Date().toISOString(),
@@ -140,9 +172,20 @@ export async function POST(req: Request) {
 
 /**
  * PATCH /api/reports
- * อัปโหวต (upvote) หรือประเมินความพึงพอใจ (rating)
+ * อัปโหวต (upvote) หรือประเมินความพึงพอใจ (rating) พร้อม Rate Limiter
  */
 export async function PATCH(req: Request) {
+  const clientIp = getClientIp(req);
+
+  // Rate limit: 30 actions per minute per IP
+  const rateLimit = checkRateLimit(`action:${clientIp}`, 30, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'คุณทำรายการเร็วเกินไป กรุณารอสักครู่' },
+      { status: 429 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { action, id, tracking_code, rating, feedback } = body;
@@ -168,19 +211,22 @@ export async function PATCH(req: Request) {
     }
 
     if (action === 'rate') {
-      if (!rating || rating < 1 || rating > 5) {
-        return NextResponse.json({ success: false, error: 'Rating must be 1-5' }, { status: 400 });
+      const ratingNum = parseInt(rating, 10);
+      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return NextResponse.json({ success: false, error: 'คะแนนการประเมินต้องอยู่ระหว่าง 1 ถึง 5 ดาว' }, { status: 400 });
       }
 
+      const feedbackClean = feedback ? sanitizeString(feedback, 500) : null;
+
       if (isSupabaseConfigured && supabase) {
-        const updateData: any = { rating };
-        if (feedback) updateData.rating_feedback = feedback;
+        const updateData: any = { rating: ratingNum };
+        if (feedbackClean) updateData.rating_feedback = feedbackClean;
         const updateQuery = id ? supabase.from('road_reports').update(updateData).eq('id', id)
           : supabase.from('road_reports').update(updateData).eq('tracking_code', tracking_code);
         await updateQuery;
-        return NextResponse.json({ success: true, rating, feedback });
+        return NextResponse.json({ success: true, rating: ratingNum, feedback: feedbackClean });
       }
-      return NextResponse.json({ success: true, rating, feedback });
+      return NextResponse.json({ success: true, rating: ratingNum, feedback: feedbackClean });
     }
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });

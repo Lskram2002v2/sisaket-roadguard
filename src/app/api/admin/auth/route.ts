@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
-import { signAdminToken } from '@/lib/security';
+import { signAdminToken, checkRateLimit, getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const clientIp = getClientIp(req);
+
+  // Rate Limiter: Max 5 PIN attempts per 15 minutes per IP to prevent Brute-Force
+  const rateLimit = checkRateLimit(`auth:${clientIp}`, 5, 15 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    const minutesLeft = Math.ceil((rateLimit.resetTimeMs - Date.now()) / 60000);
+    return NextResponse.json(
+      {
+        success: false,
+        error: `ระบบถูกระงับชั่วคราวเนื่องจากกรอกรหัสผิดเกินจำนวนที่กำหนด กรุณารอ ${minutesLeft} นาที`,
+      },
+      { status: 429 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { pin } = body;
@@ -11,13 +26,18 @@ export async function POST(req: Request) {
     const validPins = [
       process.env.ADMIN_PIN,
       process.env.NEXT_PUBLIC_ADMIN_PIN,
-      '1234',
-      '5101'
+      // Default dev fallback only in non-production
+      ...(process.env.NODE_ENV !== 'production' ? ['1234', '5101'] : []),
     ].filter(Boolean);
 
-    if (!pin || !validPins.includes(String(pin).trim())) {
+    const inputPin = String(pin || '').trim();
+
+    if (!inputPin || !validPins.includes(inputPin)) {
       return NextResponse.json(
-        { success: false, error: 'รหัส PIN ผู้บริหารไม่ถูกต้อง' },
+        {
+          success: false,
+          error: `รหัส PIN ผู้บริหารไม่ถูกต้อง (เหลือโอกาสลองอีก ${rateLimit.remaining} ครั้ง)`,
+        },
         { status: 401 }
       );
     }
@@ -25,13 +45,13 @@ export async function POST(req: Request) {
     // Generate signed secure token
     const token = signAdminToken({
       role: 'admin',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     const response = NextResponse.json({
       success: true,
       token,
-      message: 'ยืนยันตัวตนผู้บริหารสำเร็จ'
+      message: 'ยืนยันตัวตนผู้บริหารสำเร็จ',
     });
 
     // Set secure cookie
@@ -42,7 +62,7 @@ export async function POST(req: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 // 24 hours
+      maxAge: 60 * 60 * 24, // 24 hours
     });
 
     return response;

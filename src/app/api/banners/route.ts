@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { SponsorBanner } from '@/lib/types';
 import { INITIAL_BANNERS } from '@/lib/db-store';
+import { isAuthorized, isValidHttpUrl, sanitizeString } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/banners
- * ดึงข้อมูลป้ายประชาสัมพันธ์ / ผู้สนับสนุน ทั้งหมดจากฐานข้อมูล (เรียงตามลำดับ order)
+ * ดึงข้อมูลป้ายประชาสัมพันธ์ / ผู้สนับสนุน ทั้งหมดจากฐานข้อมูล (Public Read)
  */
 export async function GET() {
   try {
@@ -22,7 +23,6 @@ export async function GET() {
       }
     }
 
-    // กรณีที่ยังไม่ได้ตั้งค่า DB หรือ DB ยังว่าง ให้ส่ง Initial Banners เริ่มต้น
     return NextResponse.json({ success: true, source: 'default', data: INITIAL_BANNERS });
   } catch (err: any) {
     console.error('API /api/banners GET error:', err);
@@ -32,28 +32,42 @@ export async function GET() {
 
 /**
  * POST /api/banners
- * เพิ่มป้ายประชาสัมพันธ์ใหม่ลงในฐานข้อมูล
+ * เพิ่มป้ายประชาสัมพันธ์ใหม่ (Protected - ต้องมีสิทธิ์ Admin)
  */
 export async function POST(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: เฉพาะเจ้าหน้าที่ผู้ดูแลระบบเท่านั้นที่สามารถเพิ่มป้ายได้' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { title, subtitle, image_url, target_link, is_active, order } = body;
 
-    if (!image_url) {
+    if (!image_url || typeof image_url !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'กรุณาระบุ URL รูปภาพ' },
+        { success: false, error: 'กรุณาระบุ URL รูปภาพที่ถูกต้อง' },
+        { status: 400 }
+      );
+    }
+
+    if (target_link && !isValidHttpUrl(target_link)) {
+      return NextResponse.json(
+        { success: false, error: 'ลิงก์เป้าหมายไม่ถูกต้อง (ต้องขึ้นต้นด้วย http:// หรือ https://)' },
         { status: 400 }
       );
     }
 
     const newBanner: SponsorBanner = {
       id: `ban-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      title: title || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
-      subtitle: subtitle || undefined,
-      image_url: image_url,
-      target_link: target_link || undefined,
+      title: sanitizeString(title, 200) || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
+      subtitle: subtitle ? sanitizeString(subtitle, 200) : undefined,
+      image_url: image_url.trim(),
+      target_link: target_link ? target_link.trim() : undefined,
       is_active: is_active ?? true,
-      order: order ?? 1,
+      order: typeof order === 'number' ? order : 1,
       created_at: new Date().toISOString(),
     };
 
@@ -74,9 +88,7 @@ export async function POST(req: Request) {
         .select()
         .single();
 
-      if (error) {
-        console.warn('Supabase insert banner warning:', error.message);
-      } else if (data) {
+      if (!error && data) {
         return NextResponse.json({ success: true, data }, { status: 201 });
       }
     }
@@ -93,9 +105,16 @@ export async function POST(req: Request) {
 
 /**
  * PUT /api/banners
- * อัปเดต / แก้ไข / สลับสถานะ / จัดลำดับป้าย
+ * อัปเดต / แก้ไข / สลับสถานะ / จัดลำดับป้าย (Protected - ต้องมีสิทธิ์ Admin)
  */
 export async function PUT(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: เฉพาะเจ้าหน้าที่ผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขป้ายได้' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { action, id, banner, orderedIds } = body;
@@ -134,12 +153,19 @@ export async function PUT(req: Request) {
 
     if (action === 'update' && (id || banner?.id)) {
       const bannerId = id || banner.id;
+      if (banner.target_link && !isValidHttpUrl(banner.target_link)) {
+        return NextResponse.json(
+          { success: false, error: 'ลิงก์เป้าหมายไม่ถูกต้อง (ต้องขึ้นต้นด้วย http:// หรือ https://)' },
+          { status: 400 }
+        );
+      }
+
       if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
           .from('sponsor_banners')
           .update({
-            title: banner.title,
-            subtitle: banner.subtitle || null,
+            title: sanitizeString(banner.title, 200),
+            subtitle: banner.subtitle ? sanitizeString(banner.subtitle, 200) : null,
             image_url: banner.image_url,
             target_link: banner.target_link || null,
             is_active: banner.is_active ?? true,
@@ -169,9 +195,16 @@ export async function PUT(req: Request) {
 
 /**
  * DELETE /api/banners?id=...
- * ลบป้ายประชาสัมพันธ์ออกจากฐานข้อมูล
+ * ลบป้ายประชาสัมพันธ์ (Protected - ต้องมีสิทธิ์ Admin)
  */
 export async function DELETE(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: เฉพาะเจ้าหน้าที่ผู้ดูแลระบบเท่านั้นที่สามารถลบป้ายได้' },
+      { status: 401 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
@@ -184,10 +217,7 @@ export async function DELETE(req: Request) {
     }
 
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('sponsor_banners').delete().eq('id', id);
-      if (error) {
-        console.warn('Supabase delete banner warning:', error.message);
-      }
+      await supabase.from('sponsor_banners').delete().eq('id', id);
     }
 
     return NextResponse.json({ success: true, message: `ลบป้าย ID ${id} เรียบร้อยแล้ว` });

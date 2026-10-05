@@ -1,24 +1,8 @@
 import { NextResponse } from 'next/server';
-import { verifyAdminToken } from '@/lib/security';
+import { isAuthorized } from '@/lib/security';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-
-function isAuthorized(req: Request): boolean {
-  const authHeader = req.headers.get('Authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    if (verifyAdminToken(token)) return true;
-  }
-
-  const cookieHeader = req.headers.get('cookie');
-  if (cookieHeader) {
-    const match = cookieHeader.match(/sisaket_admin_session=([^;]+)/);
-    if (match && verifyAdminToken(match[1])) return true;
-  }
-
-  return false;
-}
 
 export async function PATCH(req: Request) {
   if (!isAuthorized(req)) {
