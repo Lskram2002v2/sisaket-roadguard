@@ -64,17 +64,19 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Tab Content Display */}
-        <div className="animate-fadeIn">
-          {activeTab === 'report' && (
+        {/* Tab Content Display - Persistent DOM for Instant 0ms Switching */}
+        <div>
+          <div className={activeTab === 'report' ? 'block animate-fadeIn' : 'hidden'}>
             <CitizenReportForm onSuccessNavigateToTrack={handleReportSuccess} />
-          )}
+          </div>
 
-          {activeTab === 'track' && (
+          <div className={activeTab === 'track' ? 'block animate-fadeIn' : 'hidden'}>
             <CitizenTrackingPortal initialCode={trackInitialCode} />
-          )}
+          </div>
 
-          {activeTab === 'feed' && <PublicMapFeed />}
+          <div className={activeTab === 'feed' ? 'block animate-fadeIn' : 'hidden'}>
+            <PublicMapFeed />
+          </div>
         </div>
       </div>
 

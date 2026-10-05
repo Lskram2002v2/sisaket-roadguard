@@ -130,7 +130,23 @@ class RoadReportStore {
     };
   }
 
-  public async getAllReports(): Promise<RoadReport[]> {
+  public getReportsInstant(): RoadReport[] {
+    return [...this.reports];
+  }
+
+  public async getAllReports(forceFresh = false): Promise<RoadReport[]> {
+    // SWR: หากมีแคชในหน่วยความจำอยู่แล้ว ให้ส่งกลับทันที 0ms
+    if (!forceFresh && this.reports.length > 0) {
+      // Refresh ใน background โดยไม่บล็อค UI
+      this.refreshFromSupabase().catch(() => {});
+      return [...this.reports];
+    }
+
+    await this.refreshFromSupabase();
+    return [...this.reports];
+  }
+
+  public async refreshFromSupabase(): Promise<RoadReport[]> {
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase

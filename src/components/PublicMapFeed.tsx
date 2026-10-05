@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ThumbsUp, Filter, MapPin, CheckCircle2, Clock, Wrench, Layers } from 'lucide-react';
+import { ThumbsUp, Filter, MapPin, CheckCircle2, Clock, Wrench, Layers, Sparkles } from 'lucide-react';
 import { RoadReport } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { SISAKET_DISTRICTS, SISAKET_CENTER } from '@/lib/geofence';
@@ -11,20 +11,33 @@ export default function PublicMapFeed() {
   const [reports, setReports] = useState<RoadReport[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
   const [activeReport, setActiveReport] = useState<RoadReport | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersGroupRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
 
   useEffect(() => {
+    // 1. โหลดข้อมูลแคชทันที 0ms
+    setReports(roadStore.getReportsInstant());
+
+    // 2. ซิงค์สดจาก Supabase
     loadData();
-    const unsub = roadStore.subscribe(loadData);
+
+    const unsub = roadStore.subscribe(() => {
+      setReports(roadStore.getReportsInstant());
+    });
     return () => unsub();
   }, []);
 
   const loadData = async () => {
-    const data = await roadStore.getAllReports();
-    setReports(data);
+    setIsLoading(true);
+    try {
+      const data = await roadStore.getAllReports(true);
+      setReports(data);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filteredReports = selectedDistrict === 'ALL'
@@ -179,9 +192,17 @@ export default function PublicMapFeed() {
             <Filter className="h-4 w-4 text-amber-600" />
             <span>กรองตาม 22 อำเภอ ({filteredReports.length} จุด)</span>
           </div>
-          <span className="text-[11px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-            🟣 เส้นแบ่งเขตจริง
-          </span>
+          <div className="flex items-center gap-1.5">
+            {isLoading && (
+              <span className="flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium animate-pulse">
+                <Sparkles className="h-3 w-3 animate-spin text-amber-600" />
+                <span>กำลังซิงค์สด...</span>
+              </span>
+            )}
+            <span className="text-[11px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+              🟣 เส้นแบ่งเขตจริง
+            </span>
+          </div>
         </div>
 
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">

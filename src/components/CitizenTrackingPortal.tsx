@@ -20,17 +20,23 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState<'my_wallet' | 'community' | 'search'>('my_wallet');
   const [communityDistrict, setCommunityDistrict] = useState<string>('ALL');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // 1. โหลดข้อมูลแคชทันที 0ms
+    syncData(roadStore.getReportsInstant());
+    
+    // 2. ซิงค์ข้อมูลล่าสุดจาก Supabase ใน background
     loadAllData();
-    const unsub = roadStore.subscribe(loadAllData);
+
+    const unsub = roadStore.subscribe(() => {
+      syncData(roadStore.getReportsInstant());
+    });
     return () => unsub();
   }, [initialCode]);
 
-  const loadAllData = async () => {
-    const all = await roadStore.getAllReports();
+  const syncData = (all: RoadReport[]) => {
     setAllReports(all);
-
     const myCodes = roadStore.getMyReportedCodes();
     const matched = all.filter((r) => myCodes.includes(r.tracking_code));
     setMyReports(matched);
@@ -47,6 +53,16 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
       setActiveReport(matched[0]);
     } else if (!activeReport && all.length > 0) {
       setActiveReport(all[0]);
+    }
+  };
+
+  const loadAllData = async () => {
+    setIsLoading(true);
+    try {
+      const all = await roadStore.getAllReports(true);
+      syncData(all);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -142,6 +158,14 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
             </button>
           </div>
         </div>
+
+        {/* Live Sync Status Indicator */}
+        {isLoading && (
+          <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-amber-800 bg-amber-50/90 border border-amber-200/80 py-1.5 px-3 rounded-xl animate-pulse">
+            <Sparkles className="h-3.5 w-3.5 animate-spin text-amber-600" />
+            <span>กำลังซิงค์ข้อมูลสดจากระบบคลาวด์...</span>
+          </div>
+        )}
 
         {/* Search Input Box */}
         {activeTab === 'search' && (
