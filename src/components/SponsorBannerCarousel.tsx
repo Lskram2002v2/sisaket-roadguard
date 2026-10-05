@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SponsorBanner } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { normalizeImageUrl, getGoogleDriveThumbnailUrl, FALLBACK_BANNER_IMAGE } from '@/lib/image-helper';
-import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react';
 
 export default function SponsorBannerCarousel() {
   const [banners, setBanners] = useState<SponsorBanner[]>([]);
@@ -28,7 +28,7 @@ export default function SponsorBannerCarousel() {
     return () => unsub();
   }, []);
 
-  // Auto-play timer (4.5s)
+  // Auto-play timer
   useEffect(() => {
     if (banners.length <= 1 || isPaused) return;
 
@@ -42,8 +42,6 @@ export default function SponsorBannerCarousel() {
   }, [banners.length, isPaused]);
 
   if (banners.length === 0) return null;
-
-  const currentBanner = banners[currentIndex] || banners[0];
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -70,102 +68,160 @@ export default function SponsorBannerCarousel() {
     touchStartXRef.current = null;
   };
 
-  const handleBannerClick = (link?: string) => {
+  const handleCenterClick = (link?: string) => {
     if (!link) return;
     window.open(link, '_blank', 'noopener,noreferrer');
   };
 
+  // Generate 5 slots for the 3D Coverflow Deck (-2, -1, 0, 1, 2)
+  const deckSlots = [-2, -1, 0, 1, 2].map((offset) => {
+    const rawIdx = (currentIndex + offset + banners.length * 100) % banners.length;
+    return {
+      offset,
+      item: banners[rawIdx],
+      index: rawIdx,
+    };
+  });
+
   return (
-    <div
-      className="relative w-full select-none space-y-2.5 pt-1 pb-2"
+    <section
+      className="relative w-full overflow-hidden select-none py-4 space-y-4"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      aria-label="Simple Image Carousel"
+      aria-label="3D Simple Image Carousel"
     >
-      {/* 1. Main Image Box */}
-      <div
-        onClick={() => handleBannerClick(currentBanner.target_link)}
-        className={`group relative h-44 sm:h-56 md:h-64 w-full overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 shadow-md transition-all ${
-          currentBanner.target_link ? 'cursor-pointer active:scale-[0.99]' : ''
-        }`}
-      >
-        {banners.map((item, idx) => {
-          const isActive = idx === currentIndex;
+      {/* 3D Layered Card Deck Container */}
+      <div className="relative flex items-center justify-center h-48 sm:h-60 md:h-72 w-full perspective-[1000px]">
+        {deckSlots.map(({ offset, item, index }) => {
+          const isCenter = offset === 0;
+          const isFlankingLeft = offset === -1;
+          const isFlankingRight = offset === 1;
+          const isOuterLeft = offset === -2;
+          const isOuterRight = offset === 2;
+
+          let transformClass = '';
+          let zIndexClass = '';
+          let opacityClass = '';
+          let scaleClass = '';
+
+          if (isCenter) {
+            transformClass = 'translate-x-0';
+            scaleClass = 'scale-100';
+            zIndexClass = 'z-30';
+            opacityClass = 'opacity-100';
+          } else if (isFlankingLeft) {
+            transformClass = '-translate-x-[48%] sm:-translate-x-[54%]';
+            scaleClass = 'scale-[0.84] sm:scale-[0.88]';
+            zIndexClass = 'z-20';
+            opacityClass = 'opacity-80 sm:opacity-90';
+          } else if (isFlankingRight) {
+            transformClass = 'translate-x-[48%] sm:translate-x-[54%]';
+            scaleClass = 'scale-[0.84] sm:scale-[0.88]';
+            zIndexClass = 'z-20';
+            opacityClass = 'opacity-80 sm:opacity-90';
+          } else if (isOuterLeft) {
+            transformClass = '-translate-x-[90%] sm:-translate-x-[98%]';
+            scaleClass = 'scale-[0.68] sm:scale-[0.74]';
+            zIndexClass = 'z-10';
+            opacityClass = 'opacity-40 sm:opacity-55';
+          } else if (isOuterRight) {
+            transformClass = 'translate-x-[90%] sm:translate-x-[98%]';
+            scaleClass = 'scale-[0.68] sm:scale-[0.74]';
+            zIndexClass = 'z-10';
+            opacityClass = 'opacity-40 sm:opacity-55';
+          }
+
           const imageUrl = normalizeImageUrl(item.image_url);
 
           return (
             <div
-              key={item.id}
-              className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${
-                isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-              }`}
+              key={`${item.id}-${offset}`}
+              onClick={() => {
+                if (isCenter) {
+                  handleCenterClick(item.target_link);
+                } else {
+                  setCurrentIndex(index);
+                }
+              }}
+              className={`absolute top-0 bottom-0 w-[72%] sm:w-[60%] md:w-[50%] transition-all duration-500 ease-out transform cursor-pointer ${transformClass} ${scaleClass} ${zIndexClass} ${opacityClass}`}
+              style={{ willChange: 'transform, opacity' }}
             >
-              {/* Full Main Image */}
-              <img
-                src={imageUrl}
-                alt={item.title || `Banner ${idx + 1}`}
-                className="h-full w-full object-cover object-center"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  const thumbUrl = getGoogleDriveThumbnailUrl(item.image_url);
-                  if (target.src !== thumbUrl && thumbUrl !== target.src) {
-                    target.src = thumbUrl;
-                  } else {
-                    target.src = FALLBACK_BANNER_IMAGE;
-                  }
-                }}
-              />
+              <div
+                className={`relative h-full w-full rounded-3xl sm:rounded-[32px] overflow-hidden bg-stone-900 shadow-xl border ${
+                  isCenter
+                    ? 'border-amber-400/40 shadow-2xl ring-1 ring-amber-400/20'
+                    : 'border-stone-800/80'
+                }`}
+              >
+                {/* Clean Image */}
+                <img
+                  src={imageUrl}
+                  alt={item.title || `Slide ${index + 1}`}
+                  className="h-full w-full object-cover object-center pointer-events-none"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    const thumbUrl = getGoogleDriveThumbnailUrl(item.image_url);
+                    if (target.src !== thumbUrl && thumbUrl !== target.src) {
+                      target.src = thumbUrl;
+                    } else {
+                      target.src = FALLBACK_BANNER_IMAGE;
+                    }
+                  }}
+                />
 
-              {/* Optional Subtle Link Indicator Icon on Top Right if link exists */}
-              {item.target_link && (
-                <div className="absolute top-2.5 right-2.5 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white/90 backdrop-blur-md border border-white/20 shadow-sm">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </div>
-              )}
+                {/* Subtle external link badge on center active card */}
+                {isCenter && item.target_link && (
+                  <div className="absolute top-3 right-3 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-amber-300 backdrop-blur-md border border-white/20 shadow-md">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
-
-        {/* 2. Navigation Arrows (Left & Right) */}
-        {banners.length > 1 && (
-          <>
-            <button
-              onClick={handlePrev}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/80 backdrop-blur-md border border-white/20 shadow-md transition-all active:scale-95"
-              aria-label="รูปภาพก่อนหน้า"
-            >
-              <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
-            <button
-              onClick={handleNext}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/80 backdrop-blur-md border border-white/20 shadow-md transition-all active:scale-95"
-              aria-label="รูปภาพถัดไป"
-            >
-              <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
-          </>
-        )}
       </div>
 
-      {/* 3. Pagination Dots (จุดไข่ปลาด้านล่างภาพ) */}
-      {banners.length > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          {banners.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentIndex(i)}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                i === currentIndex
-                  ? 'w-6 bg-amber-500 shadow-sm'
-                  : 'w-2 bg-stone-300 hover:bg-stone-400'
-              }`}
-              aria-label={`ไปยังรูปที่ ${i + 1}`}
-            />
-          ))}
+      {/* Unified Inline Navigation Controller: [ ← ] [ • • • • • ] [ → ] */}
+      <div className="flex items-center justify-center gap-3 pt-1">
+        {/* Left Arrow Button */}
+        <button
+          onClick={handlePrev}
+          className="p-1.5 rounded-full text-stone-400 hover:text-amber-500 hover:bg-stone-100 transition-all active:scale-95"
+          aria-label="ย้อนกลับ"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+
+        {/* Pagination Dots */}
+        <div className="flex items-center gap-1.5">
+          {banners.map((_, i) => {
+            const isActive = i === currentIndex;
+            return (
+              <button
+                key={i}
+                onClick={() => setCurrentIndex(i)}
+                className={`transition-all duration-300 rounded-full ${
+                  isActive
+                    ? 'w-4 h-2 bg-purple-600 sm:bg-amber-500 shadow-sm'
+                    : 'w-2 h-2 bg-stone-300 hover:bg-stone-400'
+                }`}
+                aria-label={`ไปยังรูปที่ ${i + 1}`}
+              />
+            );
+          })}
         </div>
-      )}
-    </div>
+
+        {/* Right Arrow Button */}
+        <button
+          onClick={handleNext}
+          className="p-1.5 rounded-full text-stone-400 hover:text-amber-500 hover:bg-stone-100 transition-all active:scale-95"
+          aria-label="ถัดไป"
+        >
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </section>
   );
 }
