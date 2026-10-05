@@ -22,6 +22,8 @@ import { RoadReport } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { playAlertChime } from '@/lib/audio-synth';
 
+import { getLeaflet } from '@/lib/leaflet-loader';
+
 // ฐานข้อมูลสถานที่สำคัญและชุมชนใน จ.ศรีสะเกษ สำหรับการค้นหาไว 0ms (Instant Sisaket Places Index)
 const SISAKET_LANDMARKS_INDEX = [
   { name: 'ศาลากลางจังหวัดศรีสะเกษ', district: 'เมืองศรีสะเกษ', lat: 15.1158, lng: 104.3298 },
@@ -53,6 +55,7 @@ interface Props {
   latitude: number;
   longitude: number;
   district: string;
+  isActive?: boolean;
   onLocationChange: (lat: number, lng: number, district: string) => void;
   onProximityAlert?: (isNearby: boolean) => void;
 }
@@ -61,6 +64,7 @@ export default function ReportMapPicker({
   latitude,
   longitude,
   district,
+  isActive = true,
   onLocationChange,
   onProximityAlert,
 }: Props) {
@@ -88,6 +92,20 @@ export default function ReportMapPicker({
   const allDistrictsLayerRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
+
+  // Auto-resize Leaflet container whenever tab becomes visible
+  useEffect(() => {
+    if (isActive && mapInstanceRef.current) {
+      const t = setTimeout(() => {
+        try {
+          mapInstanceRef.current?.invalidateSize();
+        } catch {
+          // ignore
+        }
+      }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [isActive]);
 
   // Trigger Mandatory GPS Modal on first visit to enforce location permission
   useEffect(() => {
@@ -159,14 +177,8 @@ export default function ReportMapPicker({
 
     async function initLeaflet() {
       if (typeof window === 'undefined' || !mapContainerRef.current) return;
-      const L = await import('leaflet');
-
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
+      const L = await getLeaflet();
+      if (!L) return;
 
       if (!mapInstanceRef.current && mapContainerRef.current && isSubscribed) {
         const initialLat = latitude || SISAKET_CENTER.lat;
@@ -262,7 +274,8 @@ export default function ReportMapPicker({
   useEffect(() => {
     async function updateActiveDistrictBoundary() {
       if (!mapInstanceRef.current) return;
-      const L = await import('leaflet');
+      const L = await getLeaflet();
+      if (!L) return;
 
       if (activeDistrictLayerRef.current) {
         mapInstanceRef.current.removeLayer(activeDistrictLayerRef.current);

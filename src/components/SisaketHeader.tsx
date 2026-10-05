@@ -57,19 +57,18 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
   });
 
   useEffect(() => {
-    const fetch = async () => {
-      const data = await roadStore.getAllReports();
-      setReports(data);
-      const theme = await roadStore.getThemeConfig();
-      setThemeConfig(theme);
-    };
-    fetch();
+    // 1. Initial Instant Read (0ms)
+    setReports(roadStore.getReportsInstant());
+    setThemeConfig(roadStore.getThemeConfigInstant());
 
-    const unsub = roadStore.subscribe(async () => {
-      const data = await roadStore.getAllReports();
-      setReports(data);
-      const theme = await roadStore.getThemeConfig();
-      setThemeConfig(theme);
+    // 2. Fetch fresh in background if needed
+    roadStore.getAllReports().then((data) => setReports(data)).catch(() => {});
+    roadStore.getThemeConfig().then((theme) => setThemeConfig(theme)).catch(() => {});
+
+    // 3. Subscribe for store changes
+    const unsub = roadStore.subscribe(() => {
+      setReports(roadStore.getReportsInstant());
+      setThemeConfig(roadStore.getThemeConfigInstant());
     });
 
     return () => {
@@ -112,12 +111,13 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
         {slides.map((item, idx) => (
           <div
             key={idx}
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 transform-gpu ${
               idx === activeSlideIndex ? 'opacity-40 scale-105' : 'opacity-0 scale-100'
             }`}
             style={{
               backgroundImage: `url(${item.img}), url(${SISAKET_LANDMARKS[0].img})`,
               transitionProperty: 'opacity, transform',
+              willChange: 'opacity, transform',
             }}
           />
         ))}

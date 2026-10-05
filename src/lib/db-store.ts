@@ -147,6 +147,16 @@ class RoadReportStore {
   private theme: HeaderThemeConfig = { ...INITIAL_THEME };
   private listeners: Array<() => void> = [];
 
+  // High-Performance SWR Cache & Deduplication
+  private lastReportsFetchTime = 0;
+  private lastBannersFetchTime = 0;
+  private lastThemeFetchTime = 0;
+  private readonly CACHE_TTL_MS = 20000; // 20s TTL for background auto-refresh
+  private inFlightReportsPromise: Promise<RoadReport[]> | null = null;
+  private inFlightBannersPromise: Promise<SponsorBanner[]> | null = null;
+  private inFlightThemePromise: Promise<HeaderThemeConfig> | null = null;
+  private notifyDebounceTimer: any = null;
+
   constructor() {
     this.init();
   }
@@ -162,7 +172,7 @@ class RoadReportStore {
         }
       } else {
         this.reports = [...INITIAL_REPORTS];
-        this.save();
+        this.save(false);
       }
 
       const storedBanners = localStorage.getItem(BANNERS_STORAGE_KEY);
@@ -173,15 +183,15 @@ class RoadReportStore {
             this.banners = parsed;
           } else {
             this.banners = [...INITIAL_BANNERS];
-            this.saveBanners();
+            this.saveBanners(false);
           }
         } catch {
           this.banners = [...INITIAL_BANNERS];
-          this.saveBanners();
+          this.saveBanners(false);
         }
       } else {
         this.banners = [...INITIAL_BANNERS];
-        this.saveBanners();
+        this.saveBanners(false);
       }
 
       const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
@@ -193,7 +203,7 @@ class RoadReportStore {
         }
       } else {
         this.theme = { ...INITIAL_THEME };
-        this.saveTheme();
+        this.saveTheme(false);
       }
     } else {
       this.reports = [...INITIAL_REPORTS];
@@ -202,7 +212,7 @@ class RoadReportStore {
     }
   }
 
-  private save() {
+  private save(shouldNotify = true) {
     if (typeof window !== 'undefined') {
       const sanitizedReports = this.reports.map((r) => ({
         ...r,
@@ -212,26 +222,39 @@ class RoadReportStore {
             : r.reporter_phone,
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedReports));
-      this.notifyListeners();
+      if (shouldNotify) this.debouncedNotify();
     }
   }
 
-  private saveBanners() {
+  private saveBanners(shouldNotify = true) {
     if (typeof window !== 'undefined') {
       localStorage.setItem(BANNERS_STORAGE_KEY, JSON.stringify(this.banners));
-      this.notifyListeners();
+      if (shouldNotify) this.debouncedNotify();
     }
   }
 
-  private saveTheme() {
+  private saveTheme(shouldNotify = true) {
     if (typeof window !== 'undefined') {
       localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(this.theme));
-      this.notifyListeners();
+      if (shouldNotify) this.debouncedNotify();
     }
+  }
+
+  private debouncedNotify() {
+    if (this.notifyDebounceTimer) clearTimeout(this.notifyDebounceTimer);
+    this.notifyDebounceTimer = setTimeout(() => {
+      this.notifyListeners();
+    }, 50);
   }
 
   private notifyListeners() {
-    this.listeners.forEach((l) => l());
+    this.listeners.forEach((l) => {
+      try {
+        l();
+      } catch (e) {
+        console.error('Error in store listener:', e);
+      }
+    });
   }
 
   public subscribe(listener: () => void): () => void {
@@ -246,50 +269,78 @@ class RoadReportStore {
   }
 
   public async getAllReports(forceFresh = false): Promise<RoadReport[]> {
-    // SWR: หากมีแคชในหน่วยความจำอยู่แล้ว ให้ส่งกลับทันที 0ms
+    const isCacheFresh = Date.now() - this.lastReportsFetchTime < this.CACHE_TTL_MS;
+
+    // Instant SWR Cache Hit (0ms) without triggering background re-fetch if still fresh
     if (!forceFresh && this.reports.length > 0) {
-      // Refresh ใน background โดยไม่บล็อค UI
-      this.refreshFromSupabase().catch(() => {});
+      if (!isCacheFresh) {
+        this.refreshFromSupabase().catch(() => {});
+      }
       return [...this.reports];
     }
 
-    await this.refreshFromSupabase();
-    return [...this.reports];
+    return this.refreshFromSupabase();
   }
 
   public async refreshFromSupabase(): Promise<RoadReport[]> {
-    if (typeof window !== 'undefined') {
-      try {
-        const res = await fetch('/api/reports', { cache: 'no-store' });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            this.reports = json.data;
-            this.save();
-            return this.reports;
-          }
-        }
-      } catch (err) {
-        console.warn('API /api/reports fetch failed, fallback to local store:', err);
-      }
+    // If a request is already in-flight, return the same promise to prevent duplicate API requests
+    if (this.inFlightReportsPromise) {
+      return this.inFlightReportsPromise;
     }
 
-    if (isSupabaseConfigured && supabase) {
+    this.inFlightReportsPromise = (async () => {
       try {
-        const { data, error } = await supabase
-          .from('road_reports')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          this.reports = data;
-          this.save();
-          return data;
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch('/api/reports', { cache: 'no-store' });
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && Array.isArray(json.data)) {
+                const prevStr = JSON.stringify(this.reports);
+                const nextStr = JSON.stringify(json.data);
+                this.reports = json.data;
+                this.lastReportsFetchTime = Date.now();
+                // Only notify if data actually changed
+                if (prevStr !== nextStr) {
+                  this.save(true);
+                }
+                return this.reports;
+              }
+            }
+          } catch (err) {
+            console.warn('API /api/reports fetch failed, fallback to local store:', err);
+          }
         }
-      } catch (err) {
-        console.warn('Supabase fetch failed, fallback to local store:', err);
+
+        if (isSupabaseConfigured && supabase) {
+          try {
+            const { data, error } = await supabase
+              .from('road_reports')
+              .select('*')
+              .order('created_at', { ascending: false });
+            if (!error && Array.isArray(data) && data.length > 0) {
+              const prevStr = JSON.stringify(this.reports);
+              const nextStr = JSON.stringify(data);
+              this.reports = data;
+              this.lastReportsFetchTime = Date.now();
+              if (prevStr !== nextStr) {
+                this.save(true);
+              }
+              return data;
+            }
+          } catch (err) {
+            console.warn('Supabase fetch failed, fallback to local store:', err);
+          }
+        }
+
+        this.lastReportsFetchTime = Date.now();
+        return [...this.reports];
+      } finally {
+        this.inFlightReportsPromise = null;
       }
-    }
-    return [...this.reports];
+    })();
+
+    return this.inFlightReportsPromise;
   }
 
   public async clearAll(): Promise<void> {
@@ -538,48 +589,75 @@ class RoadReportStore {
   }
 
   public async getAllBanners(forceFresh = false): Promise<SponsorBanner[]> {
+    const isCacheFresh = Date.now() - this.lastBannersFetchTime < this.CACHE_TTL_MS;
+
     if (!forceFresh && this.banners.length > 0) {
-      this.refreshBannersFromSupabase().catch(() => {});
+      if (!isCacheFresh) {
+        this.refreshBannersFromSupabase().catch(() => {});
+      }
       return this.getBannersInstant();
     }
 
-    await this.refreshBannersFromSupabase();
-    return this.getBannersInstant();
+    return this.refreshBannersFromSupabase();
   }
 
   public async refreshBannersFromSupabase(): Promise<SponsorBanner[]> {
-    if (typeof window !== 'undefined') {
-      try {
-        const res = await fetch('/api/banners', { cache: 'no-store' });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            this.banners = json.data;
-            this.saveBanners();
-            return this.getBannersInstant();
-          }
-        }
-      } catch (err) {
-        console.warn('API /api/banners fetch failed, fallback to local store:', err);
-      }
+    if (this.inFlightBannersPromise) {
+      return this.inFlightBannersPromise;
     }
 
-    if (isSupabaseConfigured && supabase) {
+    this.inFlightBannersPromise = (async () => {
       try {
-        const { data, error } = await supabase
-          .from('sponsor_banners')
-          .select('*')
-          .order('order', { ascending: true });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          this.banners = data;
-          this.saveBanners();
-          return this.getBannersInstant();
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch('/api/banners', { cache: 'no-store' });
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                const prevStr = JSON.stringify(this.banners);
+                const nextStr = JSON.stringify(json.data);
+                this.banners = json.data;
+                this.lastBannersFetchTime = Date.now();
+                if (prevStr !== nextStr) {
+                  this.saveBanners(true);
+                }
+                return this.getBannersInstant();
+              }
+            }
+          } catch (err) {
+            console.warn('API /api/banners fetch failed, fallback to local store:', err);
+          }
         }
-      } catch (err) {
-        console.warn('Supabase fetch banners failed, fallback to local store:', err);
+
+        if (isSupabaseConfigured && supabase) {
+          try {
+            const { data, error } = await supabase
+              .from('sponsor_banners')
+              .select('*')
+              .order('order', { ascending: true });
+            if (!error && Array.isArray(data) && data.length > 0) {
+              const prevStr = JSON.stringify(this.banners);
+              const nextStr = JSON.stringify(data);
+              this.banners = data;
+              this.lastBannersFetchTime = Date.now();
+              if (prevStr !== nextStr) {
+                this.saveBanners(true);
+              }
+              return this.getBannersInstant();
+            }
+          } catch (err) {
+            console.warn('Supabase fetch banners failed, fallback to local store:', err);
+          }
+        }
+
+        this.lastBannersFetchTime = Date.now();
+        return this.getBannersInstant();
+      } finally {
+        this.inFlightBannersPromise = null;
       }
-    }
-    return this.getBannersInstant();
+    })();
+
+    return this.inFlightBannersPromise;
   }
 
   public async saveBanner(bannerData: Omit<SponsorBanner, 'id' | 'created_at'> & { id?: string }): Promise<SponsorBanner> {
@@ -717,49 +795,76 @@ class RoadReportStore {
   }
 
   public async getThemeConfig(forceFresh = false): Promise<HeaderThemeConfig> {
+    const isCacheFresh = Date.now() - this.lastThemeFetchTime < this.CACHE_TTL_MS;
+
     if (!forceFresh && this.theme) {
-      this.refreshThemeFromSupabase().catch(() => {});
+      if (!isCacheFresh) {
+        this.refreshThemeFromSupabase().catch(() => {});
+      }
       return this.getThemeConfigInstant();
     }
 
-    await this.refreshThemeFromSupabase();
-    return this.getThemeConfigInstant();
+    return this.refreshThemeFromSupabase();
   }
 
   public async refreshThemeFromSupabase(): Promise<HeaderThemeConfig> {
-    if (typeof window !== 'undefined') {
-      try {
-        const res = await fetch('/api/settings?key=header_theme', { cache: 'no-store' });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            this.theme = json.data as HeaderThemeConfig;
-            this.saveTheme();
-            return { ...this.theme };
-          }
-        }
-      } catch (err) {
-        console.warn('API /api/settings fetch failed:', err);
-      }
+    if (this.inFlightThemePromise) {
+      return this.inFlightThemePromise;
     }
 
-    if (isSupabaseConfigured && supabase) {
+    this.inFlightThemePromise = (async () => {
       try {
-        const { data, error } = await supabase
-          .from('system_settings')
-          .select('value')
-          .eq('key', 'header_theme')
-          .single();
-        if (!error && data?.value) {
-          this.theme = data.value as HeaderThemeConfig;
-          this.saveTheme();
-          return { ...this.theme };
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch('/api/settings?key=header_theme', { cache: 'no-store' });
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && json.data) {
+                const prevStr = JSON.stringify(this.theme);
+                const nextStr = JSON.stringify(json.data);
+                this.theme = json.data as HeaderThemeConfig;
+                this.lastThemeFetchTime = Date.now();
+                if (prevStr !== nextStr) {
+                  this.saveTheme(true);
+                }
+                return { ...this.theme };
+              }
+            }
+          } catch (err) {
+            console.warn('API /api/settings fetch failed:', err);
+          }
         }
-      } catch (err) {
-        console.warn('Supabase fetch theme failed, fallback to local store:', err);
+
+        if (isSupabaseConfigured && supabase) {
+          try {
+            const { data, error } = await supabase
+              .from('system_settings')
+              .select('value')
+              .eq('key', 'header_theme')
+              .single();
+            if (!error && data?.value) {
+              const prevStr = JSON.stringify(this.theme);
+              const nextStr = JSON.stringify(data.value);
+              this.theme = data.value as HeaderThemeConfig;
+              this.lastThemeFetchTime = Date.now();
+              if (prevStr !== nextStr) {
+                this.saveTheme(true);
+              }
+              return { ...this.theme };
+            }
+          } catch (err) {
+            console.warn('Supabase fetch theme failed, fallback to local store:', err);
+          }
+        }
+
+        this.lastThemeFetchTime = Date.now();
+        return { ...this.theme };
+      } finally {
+        this.inFlightThemePromise = null;
       }
-    }
-    return { ...this.theme };
+    })();
+
+    return this.inFlightThemePromise;
   }
 
   public async updateThemeConfig(updates: Partial<HeaderThemeConfig>): Promise<HeaderThemeConfig> {

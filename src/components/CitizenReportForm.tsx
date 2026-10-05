@@ -22,10 +22,11 @@ const QUICK_LANDMARK_CHIPS = [
 ];
 
 interface Props {
+  isActive?: boolean;
   onSuccessNavigateToTrack: (trackingCode: string) => void;
 }
 
-export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
+export default function CitizenReportForm({ isActive = true, onSuccessNavigateToTrack }: Props) {
   const [lat, setLat] = useState(SISAKET_CENTER.lat);
   const [lng, setLng] = useState(SISAKET_CENTER.lng);
   const [district, setDistrict] = useState('เมืองศรีสะเกษ');
@@ -237,6 +238,7 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
             latitude={lat}
             longitude={lng}
             district={district}
+            isActive={isActive}
             onLocationChange={(newLat, newLng, newDistrict) => {
               setLat(newLat);
               setLng(newLng);

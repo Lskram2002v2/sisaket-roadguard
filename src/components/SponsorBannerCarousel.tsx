@@ -175,15 +175,17 @@ export default function SponsorBannerCarousel() {
                   setCurrentIndex(originalIndex);
                 }
               }}
-              className="absolute top-0 bottom-0 w-[72%] sm:w-[60%] md:w-[50%] cursor-pointer"
+              className="absolute top-0 bottom-0 w-[72%] sm:w-[60%] md:w-[50%] cursor-pointer transform-gpu"
               style={{
                 transform: transformStyle,
                 zIndex,
                 opacity,
                 pointerEvents: isHidden ? 'none' : 'auto',
-                transition: 'all 600ms cubic-bezier(0.25, 1, 0.5, 1)',
+                transition: 'transform 600ms cubic-bezier(0.25, 1, 0.5, 1), opacity 600ms cubic-bezier(0.25, 1, 0.5, 1)',
                 willChange: 'transform, opacity',
                 transformStyle: 'preserve-3d',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
               }}
             >
               <div
@@ -197,6 +199,8 @@ export default function SponsorBannerCarousel() {
                 <img
                   src={imageUrl}
                   alt={item.title || `Slide ${originalIndex + 1}`}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover object-center pointer-events-none select-none"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;

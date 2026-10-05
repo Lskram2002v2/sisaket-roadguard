@@ -6,8 +6,13 @@ import { RoadReport } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { SISAKET_DISTRICTS, SISAKET_CENTER } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
+import { getLeaflet } from '@/lib/leaflet-loader';
 
-export default function PublicMapFeed() {
+interface Props {
+  isActive?: boolean;
+}
+
+export default function PublicMapFeed({ isActive = true }: Props) {
   const [reports, setReports] = useState<RoadReport[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
   const [activeReport, setActiveReport] = useState<RoadReport | null>(null);
@@ -23,7 +28,7 @@ export default function PublicMapFeed() {
     // 1. โหลดข้อมูลแคชทันที 0ms
     setReports(roadStore.getReportsInstant());
     
-    // 2. ซิงค์สดจาก Supabase
+    // 2. ซิงค์สดจาก Supabase (ถ้าแคชหมดอายุ)
     loadData();
 
     const unsub = roadStore.subscribe(() => {
@@ -32,10 +37,24 @@ export default function PublicMapFeed() {
     return () => unsub();
   }, []);
 
+  // Auto-resize Leaflet when tab becomes visible
+  useEffect(() => {
+    if (isActive && mapInstanceRef.current) {
+      const t = setTimeout(() => {
+        try {
+          mapInstanceRef.current?.invalidateSize();
+        } catch {
+          // ignore
+        }
+      }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [isActive]);
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await roadStore.getAllReports(true);
+      const data = await roadStore.getAllReports();
       setReports(data);
     } finally {
       setIsLoading(false);
@@ -48,11 +67,14 @@ export default function PublicMapFeed() {
 
   // Initialize Leaflet Map
   useEffect(() => {
+    let isSubscribed = true;
+
     async function initMap() {
       if (typeof window === 'undefined' || !mapContainerRef.current) return;
-      const L = await import('leaflet');
+      const L = await getLeaflet();
+      if (!L) return;
 
-      if (!mapInstanceRef.current && mapContainerRef.current) {
+      if (!mapInstanceRef.current && mapContainerRef.current && isSubscribed) {
         const map = L.map(mapContainerRef.current, {
           center: [SISAKET_CENTER.lat, SISAKET_CENTER.lng],
           zoom: 10,
@@ -87,6 +109,7 @@ export default function PublicMapFeed() {
     initMap();
 
     return () => {
+      isSubscribed = false;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -98,7 +121,8 @@ export default function PublicMapFeed() {
   useEffect(() => {
     async function updateBoundary() {
       if (!mapInstanceRef.current) return;
-      const L = await import('leaflet');
+      const L = await getLeaflet();
+      if (!L) return;
 
       if (activeDistrictLayerRef.current) {
         mapInstanceRef.current.removeLayer(activeDistrictLayerRef.current);
@@ -137,7 +161,8 @@ export default function PublicMapFeed() {
   useEffect(() => {
     async function renderMarkers() {
       if (!mapInstanceRef.current || !markersGroupRef.current) return;
-      const L = await import('leaflet');
+      const L = await getLeaflet();
+      if (!L) return;
 
       markersGroupRef.current.clearLayers();
 

@@ -61,7 +61,7 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      const all = await roadStore.getAllReports(true);
+      const all = await roadStore.getAllReports();
       syncData(all);
     } finally {
       setIsLoading(false);
