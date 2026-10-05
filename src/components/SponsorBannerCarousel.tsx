@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SponsorBanner } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { normalizeImageUrl, getGoogleDriveThumbnailUrl, FALLBACK_BANNER_IMAGE } from '@/lib/image-helper';
-import { ExternalLink, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 export default function SponsorBannerCarousel() {
   const [banners, setBanners] = useState<SponsorBanner[]>([]);
@@ -28,7 +28,7 @@ export default function SponsorBannerCarousel() {
     return () => unsub();
   }, []);
 
-  // Auto-play timer
+  // Auto-play timer (4.5s)
   useEffect(() => {
     if (banners.length <= 1 || isPaused) return;
 
@@ -43,11 +43,15 @@ export default function SponsorBannerCarousel() {
 
   if (banners.length === 0) return null;
 
-  const handleNext = () => {
+  const currentBanner = banners[currentIndex] || banners[0];
+
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setCurrentIndex((prev) => (prev + 1) % banners.length);
   };
 
-  const handlePrev = () => {
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
   };
 
@@ -66,28 +70,27 @@ export default function SponsorBannerCarousel() {
     touchStartXRef.current = null;
   };
 
+  const handleBannerClick = (link?: string) => {
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
   return (
-    <section
-      className="relative w-full overflow-hidden rounded-3xl bg-stone-900 border border-stone-800 shadow-xl"
+    <div
+      className="relative w-full select-none space-y-2.5 pt-1 pb-2"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      aria-label="ป้ายประชาสัมพันธ์และผู้สนับสนุนโครงการ"
+      aria-label="Simple Image Carousel"
     >
-      {/* Top Header Label */}
-      <div className="flex items-center justify-between px-3.5 pt-2.5 pb-1.5 text-[11px] font-bold text-stone-400 border-b border-stone-800/80 bg-stone-950/40">
-        <div className="flex items-center gap-1.5 text-amber-400">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span className="uppercase tracking-wider">ประชาสัมพันธ์ & ผู้สนับสนุน</span>
-        </div>
-        <div className="text-[10px] text-stone-400">
-          {currentIndex + 1} / {banners.length}
-        </div>
-      </div>
-
-      {/* Main Banner Slide Container */}
-      <div className="relative h-44 sm:h-52 md:h-60 w-full overflow-hidden bg-black/60 select-none">
+      {/* 1. Main Image Box */}
+      <div
+        onClick={() => handleBannerClick(currentBanner.target_link)}
+        className={`group relative h-44 sm:h-56 md:h-64 w-full overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 shadow-md transition-all ${
+          currentBanner.target_link ? 'cursor-pointer active:scale-[0.99]' : ''
+        }`}
+      >
         {banners.map((item, idx) => {
           const isActive = idx === currentIndex;
           const imageUrl = normalizeImageUrl(item.image_url);
@@ -95,14 +98,14 @@ export default function SponsorBannerCarousel() {
           return (
             <div
               key={item.id}
-              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+              className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${
                 isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
             >
-              {/* Background Banner Image */}
+              {/* Full Main Image */}
               <img
                 src={imageUrl}
-                alt={item.title}
+                alt={item.title || `Banner ${idx + 1}`}
                 className="h-full w-full object-cover object-center"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
@@ -115,76 +118,54 @@ export default function SponsorBannerCarousel() {
                 }}
               />
 
-              {/* Gradient Backdrop for Readability */}
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/50 to-transparent" />
-
-              {/* Content Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 p-3.5 sm:p-4 text-white space-y-1">
-                <div className="flex items-end justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs sm:text-sm font-extrabold text-white drop-shadow-md line-clamp-1">
-                      {item.title}
-                    </h4>
-                    {item.subtitle && (
-                      <p className="text-[10px] sm:text-xs text-stone-300 drop-shadow line-clamp-1 mt-0.5">
-                        {item.subtitle}
-                      </p>
-                    )}
-                  </div>
-
-                  {item.target_link && (
-                    <a
-                      href={item.target_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 flex items-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 px-2.5 py-1 text-[11px] font-bold shadow-md transition-all active:scale-95"
-                    >
-                      <span>รายละเอียด</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+              {/* Optional Subtle Link Indicator Icon on Top Right if link exists */}
+              {item.target_link && (
+                <div className="absolute top-2.5 right-2.5 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white/90 backdrop-blur-md border border-white/20 shadow-sm">
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </div>
-              </div>
+              )}
             </div>
           );
         })}
 
-        {/* Navigation Arrows for desktop/tablet */}
+        {/* 2. Navigation Arrows (Left & Right) */}
         {banners.length > 1 && (
           <>
             <button
               onClick={handlePrev}
-              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/80 backdrop-blur-sm transition-all"
-              aria-label="ก่อนหน้า"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/80 backdrop-blur-md border border-white/20 shadow-md transition-all active:scale-95"
+              aria-label="รูปภาพก่อนหน้า"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
             <button
               onClick={handleNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/80 backdrop-blur-sm transition-all"
-              aria-label="ถัดไป"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/80 backdrop-blur-md border border-white/20 shadow-md transition-all active:scale-95"
+              aria-label="รูปภาพถัดไป"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </>
         )}
       </div>
 
-      {/* Slide Indicator Dots */}
+      {/* 3. Pagination Dots (จุดไข่ปลาด้านล่างภาพ) */}
       {banners.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 py-2 bg-stone-950/80 border-t border-stone-800/80">
+        <div className="flex items-center justify-center gap-2">
           {banners.map((_, i) => (
             <button
               key={i}
               onClick={() => setCurrentIndex(i)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === currentIndex ? 'w-5 bg-amber-400' : 'w-1.5 bg-stone-700 hover:bg-stone-500'
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === currentIndex
+                  ? 'w-6 bg-amber-500 shadow-sm'
+                  : 'w-2 bg-stone-300 hover:bg-stone-400'
               }`}
-              aria-label={`Slide ${i + 1}`}
+              aria-label={`ไปยังรูปที่ ${i + 1}`}
             />
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
