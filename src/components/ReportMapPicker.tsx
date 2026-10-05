@@ -11,11 +11,9 @@ import {
   Search,
   X,
   Compass,
-  ExternalLink,
-  ClipboardPaste,
   CheckCircle2,
-  Share2,
-  Smartphone,
+  Crosshair,
+  RefreshCw,
 } from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
@@ -50,54 +48,6 @@ const SISAKET_LANDMARKS_INDEX = [
   { name: 'ด่านช่องสะงำ (ชายแดนไทย-กัมพูชา)', district: 'ภูสิงห์', lat: 14.3612, lng: 104.0625 },
 ];
 
-/**
- * แปลงพิกัดจากข้อความ / ลิงก์ Google Maps / พิกัดที่คัดลอกจากมือถือ
- */
-export function parseCoordinatesInput(rawInput: string): { lat: number; lng: number } | null {
-  if (!rawInput || typeof rawInput !== 'string') return null;
-  const input = rawInput.trim();
-
-  // 1. DMS pattern: e.g. 15°06'56.9"N 104°19'47.3"E
-  const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+([\d.]+)"?\s*([NSns])[, \t]+(\d+)[°\s]+(\d+)['\s]+([\d.]+)"?\s*([EWew])/;
-  const dmsMatch = input.match(dmsRegex);
-  if (dmsMatch) {
-    let lat = parseInt(dmsMatch[1], 10) + parseInt(dmsMatch[2], 10) / 60 + parseFloat(dmsMatch[3]) / 3600;
-    if (dmsMatch[4].toUpperCase() === 'S') lat = -lat;
-    let lng = parseInt(dmsMatch[5], 10) + parseInt(dmsMatch[6], 10) / 60 + parseFloat(dmsMatch[7]) / 3600;
-    if (dmsMatch[8].toUpperCase() === 'W') lng = -lng;
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-
-  // 2. Google Maps URL @lat,lng e.g. /@15.1158,104.3298
-  const urlAtRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
-  const urlAtMatch = input.match(urlAtRegex);
-  if (urlAtMatch) {
-    const lat = parseFloat(urlAtMatch[1]);
-    const lng = parseFloat(urlAtMatch[2]);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-
-  // 3. Google Maps URL ?q=lat,lng or &q=lat,lng or loc:lat,lng
-  const urlQRegex = /[?&]q=(?:loc:)?(-?\d+\.\d+)[,+ ]+(-?\d+\.\d+)/;
-  const urlQMatch = input.match(urlQRegex);
-  if (urlQMatch) {
-    const lat = parseFloat(urlQMatch[1]);
-    const lng = parseFloat(urlQMatch[2]);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-
-  // 4. Standard Decimal: "15.11584, 104.32981" or "15.11584 104.32981"
-  const decRegex = /(-?\d{1,2}\.\d+)[,\s/|]+(-?\d{2,3}\.\d+)/;
-  const decMatch = input.match(decRegex);
-  if (decMatch) {
-    const lat = parseFloat(decMatch[1]);
-    const lng = parseFloat(decMatch[2]);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-
-  return null;
-}
-
 interface Props {
   latitude: number;
   longitude: number;
@@ -116,6 +66,7 @@ export default function ReportMapPicker({
   const [isLocating, setIsLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
+  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
   const [reports, setReports] = useState<RoadReport[]>([]);
   
@@ -123,11 +74,6 @@ export default function ReportMapPicker({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ name: string; district: string; lat: number; lng: number }>>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-
-  // Google Maps Helper Tool Drawer State
-  const [showGmapsHelper, setShowGmapsHelper] = useState(false);
-  const [pastedCoordinates, setPastedCoordinates] = useState('');
-  const [pasteSuccess, setPasteSuccess] = useState(false);
 
   // Leaflet references
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -267,11 +213,13 @@ export default function ReportMapPicker({
           icon: amberIcon,
         }).addTo(map);
 
+        // ท่าที่ 2: ลากหมุดเองเมื่อจำเป็น (Manual marker drag)
         marker.on('dragend', (e: any) => {
           const pos = e.target.getLatLng();
           handlePositionUpdate(pos.lat, pos.lng);
         });
 
+        // ท่าที่ 2: แตะบนแผนที่เพื่อขยับหมุด (Manual tap on map)
         map.on('click', (e: any) => {
           const pos = e.latlng;
           marker.setLatLng(pos);
@@ -281,7 +229,7 @@ export default function ReportMapPicker({
         mapInstanceRef.current = map;
         markerRef.current = marker;
 
-        // Automatically trigger High-Accuracy Mobile GPS Lock on load
+        // Automatically trigger ท่าที่ 1: Live Hardware GPS Lock upon mounting
         if (typeof navigator !== 'undefined' && navigator.geolocation) {
           triggerAutoGpsLock(map, marker, L);
         }
@@ -342,8 +290,9 @@ export default function ReportMapPicker({
   };
 
   /**
-   * ดึงตำแหน่ง GPS เรียลไทม์จากมือถือด้วยความแม่นยำสูง (Real-time Mobile High-Precision GPS Lock)
-   * ระบบจะอ่านพิกัดจริงจากมือถือแล้วป้อนค่าลงในฟอร์มและขยับหมุดให้อัตโนมัติ
+   * ท่าที่ 1 (Primary Goal): ดึงพิกัดตำแหน่งปัจจุบันจากฮาร์ดแวร์ GPS มือถือโดยตรง
+   * สั่งเปิด Hardware Satellite Triangulation (enableHighAccuracy) แบบเรียลไทม์
+   * และทำการป้อนพิกัด (Latitude, Longitude, District) ลงในฟอร์มให้อัตโนมัติ 100%
    */
   const triggerAutoGpsLock = async (mapObj?: any, markerObj?: any, L?: any) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -359,7 +308,7 @@ export default function ReportMapPicker({
     setGeoError(null);
     setGpsStatusInfo({
       type: 'info',
-      text: '🛰️ กำลังดึงพิกัดเรียลไทม์จาก GPS มือถือความแม่นยำสูง...',
+      text: '🛰️ กำลังรับสัญญาณดาวเทียม GPS จากมือถือของคุณแบบเรียลไทม์...',
     });
 
     if (watchIdRef.current !== null) {
@@ -369,12 +318,13 @@ export default function ReportMapPicker({
 
     let bestAcc = Infinity;
     let bestPos: GeolocationPosition | null = null;
-    let count = 0;
+    let samples = 0;
 
     const applyLocation = (pos: GeolocationPosition) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 10);
+      setGpsAccuracyMeters(accuracy);
 
       if (accuracyCircleRef.current && currentMap) {
         currentMap.removeLayer(accuracyCircleRef.current);
@@ -382,6 +332,7 @@ export default function ReportMapPicker({
       }
 
       if (currentMap && currentMarker) {
+        // วาดวงกลมรัศมีความแม่นยำสีน้ำเงินสด
         accuracyCircleRef.current = Leaflet.circle([lat, lng], {
           radius: accuracy,
           color: '#2563EB',
@@ -394,20 +345,20 @@ export default function ReportMapPicker({
         currentMarker.setLatLng([lat, lng]);
       }
 
-      // ป้อนพิกัดลงในฟอร์มให้อัตโนมัติ
+      // ป้อนพิกัดลงในฟอร์มให้อัตโนมัติ (Data Flow Injection)
       handlePositionUpdate(lat, lng);
       const nearest = findNearestDistrict(lat, lng);
 
       if (isWithinSisaket(lat, lng)) {
         setGpsStatusInfo({
           type: 'success',
-          text: `🎯 ป้อนพิกัดจากมือถือเรียลไทม์สำเร็จ: อ.${nearest.name_th} (${lat.toFixed(5)}, ${lng.toFixed(5)} / แม่นยำ ±${accuracy} ม.)`,
+          text: `🎯 ล็อกตำแหน่งปัจจุบันสำเร็จ: อ.${nearest.name_th} (${lat.toFixed(5)}, ${lng.toFixed(5)} / แม่นยำ ±${accuracy} ม.)`,
         });
         playAlertChime('success');
       } else {
         setGpsStatusInfo({
           type: 'warning',
-          text: `📶 พิกัด GPS มือถือ (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกเขต จ.ศรีสะเกษ — ท่านสามารถพิมพ์ค้นหาหรือปักหมุดเองได้ครับ`,
+          text: `📶 พิกัด GPS มือถือ (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกเขต จ.ศรีสะเกษ — เข้าสู่ท่าที่ 2 (ปักหมุดเอง)`,
         });
       }
     };
@@ -423,15 +374,15 @@ export default function ReportMapPicker({
       } else {
         setGpsStatusInfo({
           type: 'warning',
-          text: '💡 โหมดปักหมุดเอง: ท่านสามารถแตะลากหมุดบนแผนที่ หรือเปิด Google Maps เพื่อคัดลอกพิกัดมาวางได้ทันที',
+          text: '💡 ท่าที่ 2: ท่านสามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่/ถนนด้านบนได้ทันทีครับ',
         });
       }
-    }, 5000);
+    }, 5500);
 
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
-          count++;
+          samples++;
           const acc = pos.coords.accuracy;
           if (acc < bestAcc) {
             bestAcc = acc;
@@ -443,7 +394,8 @@ export default function ReportMapPicker({
             text: `🛰️ กำลังรับสัญญาณจาก GPS มือถือ (ความแม่นยำปัจจุบัน: ±${Math.round(acc)} ม.)...`,
           });
 
-          if (acc <= 25 || count >= 3) {
+          // เมื่อได้ความแม่นยำระดับดาวเทียม (< 25 เมตร) หรือรับสัญญาณเกิน 4 รอบ ให้ล็อกพิกัดลงฟอร์มทันที
+          if (acc <= 25 || samples >= 4) {
             clearTimeout(autoTimeout);
             if (watchIdRef.current !== null) {
               navigator.geolocation.clearWatch(watchIdRef.current);
@@ -458,7 +410,7 @@ export default function ReportMapPicker({
           setIsLocating(false);
           setGpsStatusInfo({
             type: 'warning',
-            text: '⚠️ ไม่สามารถดึง GPS มือถือได้โดยตรง — ท่านสามารถใช้ตัวช่วยเปิดแอป Google Maps ด้านล่าง หรือลากหมุดเองได้ครับ',
+            text: '⚠️ ไม่สามารถดึง GPS อัตโนมัติได้ — ท่านสามารถใช้ท่าที่ 2 โดยการแตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่ได้เลยครับ',
           });
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -470,7 +422,7 @@ export default function ReportMapPicker({
   };
 
   /**
-   * ค้นหาสถานที่ / ถนน / ชุมชน ในศรีสะเกษ (Instant 0ms Index)
+   * ท่าที่ 2: ค้นหาสถานที่ / ถนน / ชุมชน ในศรีสะเกษ (Instant 0ms Index)
    */
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
@@ -530,197 +482,54 @@ export default function ReportMapPicker({
     handlePositionUpdate(target.lat, target.lng);
   };
 
-  /**
-   * นำเข้าพิกัดจาก Google Maps Link หรือข้อความพิกัดที่ผู้ใช้คัดลอกมา
-   */
-  const handleApplyPastedLocation = () => {
-    const parsed = parseCoordinatesInput(pastedCoordinates);
-    if (!parsed) {
-      setGeoError('รูปแบบพิกัดไม่ถูกต้อง (ตัวอย่างที่รองรับ: "15.1158, 104.3298" หรือลิงก์จาก Google Maps)');
-      return;
-    }
-
-    if (mapInstanceRef.current && markerRef.current) {
-      mapInstanceRef.current.flyTo([parsed.lat, parsed.lng], 16, { duration: 0.8 });
-      markerRef.current.setLatLng([parsed.lat, parsed.lng]);
-    }
-
-    handlePositionUpdate(parsed.lat, parsed.lng);
-    const nearest = findNearestDistrict(parsed.lat, parsed.lng);
-    setPasteSuccess(true);
-    setTimeout(() => setPasteSuccess(false), 3000);
-    setGpsStatusInfo({
-      type: 'success',
-      text: `🎯 ป้อนพิกัดจาก Google Maps สำเร็จ: อ.${nearest.name_th} (${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)})`,
-    });
-    playAlertChime('success');
-  };
-
   const isOutside = !isWithinSisaket(latitude, longitude);
 
   return (
     <div className="space-y-3">
-      {/* 1. Quick Search Bar for Places, Roads, and Villages in Sisaket */}
-      <div className="relative">
-        <div className="relative flex items-center">
-          <Search className="absolute left-3.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            onFocus={() => {
-              if (searchQuery.trim()) setShowDropdown(true);
-            }}
-            placeholder="🔍 ค้นหาชื่อสถานที่, ถนน, วัด, รพ., ชุมชน ในศรีสะเกษ..."
-            className="w-full rounded-2xl border border-stone-300 pl-10 pr-9 py-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50/80 shadow-sm"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSearchResults([]);
-                setShowDropdown(false);
-              }}
-              className="absolute right-3 rounded-full p-1 text-stone-400 hover:text-stone-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Autocomplete Search Dropdown */}
-        {showDropdown && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-2xl border border-stone-200 animate-fadeIn">
-            {searchResults.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectSearchResult(item)}
-                className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                  <span className="font-semibold truncate">{item.name}</span>
-                </div>
-                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full shrink-0 ml-2">
-                  อ.{item.district}
+      {/* 1. ท่าที่ 1: Primary Action Banner — One-Tap High-Accuracy Current GPS Trigger */}
+      <div className="rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 p-0.5 shadow-md shadow-amber-600/20">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 rounded-[14px] bg-white p-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 shrink-0 shadow-inner">
+              <Navigation className={`h-5 w-5 ${isLocating ? 'animate-spin text-amber-600' : 'text-amber-700'}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full">
+                  ท่าที่ 1 (หลัก)
                 </span>
-              </button>
-            ))}
+                <span className="text-xs sm:text-sm font-black text-stone-900 truncate">
+                  ดึงตำแหน่งปัจจุบันจากมือถือ
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                เปิดระบบดาวเทียมแม่นยำสูง และป้อนพิกัดเข้าฟอร์มอัตโนมัติ
+              </p>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* 2. Map Action Controls Header: District Dropdown & Mobile GPS Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-stone-900 min-w-0 truncate">
-          <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
-          <span className="truncate">จุดชำรุด (22 อำเภอ)</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* 22 District Quick Selector Dropdown */}
-          <select
-            value={district}
-            onChange={(e) => handleDistrictJump(e.target.value)}
-            aria-label="เลือกอำเภอ"
-            className="rounded-xl border border-purple-300 bg-purple-50/80 px-2.5 py-1.5 text-[11px] sm:text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
-          >
-            {SISAKET_DISTRICTS.map((d) => (
-              <option key={d.id} value={d.name_th}>
-                🟣 อ.{d.name_th}
-              </option>
-            ))}
-          </select>
-
-          {/* Primary Action: Get Real-time Mobile GPS */}
           <button
             type="button"
             onClick={() => triggerAutoGpsLock()}
             disabled={isLocating}
-            className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 px-3 py-1.5 text-[11px] sm:text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95"
-            title="ดึงพิกัดจาก GPS มือถือแบบเรียลไทม์ความแม่นยำสูง"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-amber-600/25 transition-all active:scale-95 shrink-0"
           >
-            <Navigation className={`h-3.5 w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
-            <span>{isLocating ? 'กำลังดึง GPS...' : '📍 GPS มือถือฉัน'}</span>
-          </button>
-
-          {/* Secondary Helper: Google Maps App Helper Button */}
-          <button
-            type="button"
-            onClick={() => setShowGmapsHelper(!showGmapsHelper)}
-            className={`flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] sm:text-xs font-bold transition-all border ${
-              showGmapsHelper
-                ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
-                : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200'
-            }`}
-            title="ตัวช่วยดึงพิกัดจาก Google Maps ในมือถือ"
-          >
-            <Smartphone className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Google Maps</span>
+            {isLocating ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>กำลังดึงพิกัด...</span>
+              </>
+            ) : (
+              <>
+                <Crosshair className="h-4 w-4" />
+                <span>📍 ดึงตำแหน่งปัจจุบัน</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* 3. Google Maps Native Integration Drawer / Helper Card */}
-      {showGmapsHelper && (
-        <div className="rounded-2xl bg-gradient-to-br from-blue-50 via-white to-blue-50/50 p-3 border border-blue-200 shadow-sm space-y-2.5 animate-fadeIn">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-                <Share2 className="h-3.5 w-3.5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-blue-950">ดึงพิกัดจากแอป Google Maps ในมือถือ</h4>
-                <p className="text-[10px] text-blue-700">เปิดแอปในมือถือเพื่อความแม่นยำสูงสุด แล้วคัดลอกพิกัดมาวาง</p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowGmapsHelper(false)}
-              className="rounded-full p-1 text-stone-400 hover:text-stone-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            {/* Direct Link to open Google Maps app */}
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all text-center shrink-0"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span>1. เปิด Google Maps ในมือถือ</span>
-            </a>
-
-            {/* Paste & Auto-populate Box */}
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <input
-                type="text"
-                value={pastedCoordinates}
-                onChange={(e) => setPastedCoordinates(e.target.value)}
-                placeholder="2. วางลิงก์ หรือ พิกัดที่ก๊อปปี้มา เช่น 15.1158, 104.3298"
-                className="w-full rounded-xl border border-blue-200 px-3 py-1.5 text-xs text-stone-800 placeholder:text-stone-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white shadow-inner font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleApplyPastedLocation}
-                disabled={!pastedCoordinates.trim()}
-                className="rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 px-3 py-1.5 text-xs font-bold text-stone-950 shadow-sm transition-all shrink-0"
-              >
-                {pasteSuccess ? '✅ สำเร็จ' : 'ป้อนพิกัด'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. GPS Status Banner */}
+      {/* 2. GPS Status / Feedback Alert Banner */}
       {gpsStatusInfo && (
         <div
           className={`flex items-start gap-2 rounded-2xl p-2.5 text-xs animate-fadeIn shadow-sm border ${
@@ -738,7 +547,78 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {/* 5. Geo Error / GPS Blocked Guide */}
+      {/* 3. Quick Search Bar & District Selector (ท่าที่ 2 Support) */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        {/* Search Bar */}
+        <div className="relative flex-1">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3.5 h-4 w-4 text-stone-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => {
+                if (searchQuery.trim()) setShowDropdown(true);
+              }}
+              placeholder="🔍 ค้นหาชื่อสถานที่, ถนน, วัด, รพ., ชุมชน ในศรีสะเกษ..."
+              className="w-full rounded-2xl border border-stone-300 pl-10 pr-9 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50/80 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setShowDropdown(false);
+                }}
+                className="absolute right-3 rounded-full p-1 text-stone-400 hover:text-stone-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete Search Dropdown */}
+          {showDropdown && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-2xl border border-stone-200 animate-fadeIn">
+              {searchResults.map((item, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectSearchResult(item)}
+                  className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <span className="font-semibold truncate">{item.name}</span>
+                  </div>
+                  <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                    อ.{item.district}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 22 Districts Dropdown */}
+        <div className="shrink-0">
+          <select
+            value={district}
+            onChange={(e) => handleDistrictJump(e.target.value)}
+            aria-label="เลือกอำเภอ"
+            className="w-full sm:w-auto rounded-2xl border border-purple-300 bg-purple-50/80 px-3 py-2 text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
+          >
+            {SISAKET_DISTRICTS.map((d) => (
+              <option key={d.id} value={d.name_th}>
+                🟣 อ.{d.name_th} (22 อำเภอ)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Geo Error / GPS Blocked Guide */}
       {geoError && (
         <div className="flex items-start gap-2 rounded-2xl bg-rose-50 border border-rose-300 p-2.5 text-xs text-rose-800 shadow-sm animate-fadeIn">
           <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
@@ -749,7 +629,7 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {/* 6. Proximity Alert Warning Banner */}
+      {/* Proximity Alert Warning Banner */}
       {nearbyWarning && (
         <div className="flex items-start gap-2 rounded-2xl bg-amber-500/15 border border-amber-500/40 p-3 text-xs text-amber-950 animate-fadeIn shadow-sm">
           <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
@@ -770,7 +650,7 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {/* 7. Interactive Inline Map Viewport (แบบดั้งเดิมที่ฝังอยู่ในฟอร์ม) */}
+      {/* 4. Interactive Inline Leaflet Map Container */}
       <div className="relative overflow-hidden rounded-2xl border-2 border-purple-200/80 shadow-md bg-stone-100 h-72 sm:h-80 w-full">
         <div ref={mapContainerRef} className="h-full w-full z-0" />
 
@@ -780,13 +660,13 @@ export default function ReportMapPicker({
           <span className="truncate">🟣 เส้นเขตจริง: อ.{district || 'เมืองศรีสะเกษ'}</span>
         </div>
 
-        {/* Floating Pin Helper Badge */}
+        {/* ท่าที่ 2 Guide Badge */}
         <div className="absolute bottom-2 left-2 z-10 rounded-lg bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-stone-700 shadow-sm border border-stone-200/80 backdrop-blur-sm">
-          💡 แตะบนแผนที่หรือลากหมุดสีทองเพื่อปรับตำแหน่ง
+          💡 ท่าที่ 2 (กรณีจำเป็น): แตะแผนที่หรือลากหมุดสีทองเพื่อปรับจุดชำรุด
         </div>
       </div>
 
-      {/* 8. Coordinates & District Status Capsule */}
+      {/* 5. Coordinates & District Live Status Capsule */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-purple-50/80 to-amber-50/80 px-3.5 py-2.5 text-xs border border-purple-200/80 shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
           <Layers className="h-4 w-4 text-purple-700 shrink-0" />
@@ -800,9 +680,14 @@ export default function ReportMapPicker({
         </div>
 
         <div className="flex items-center gap-1.5 self-end sm:self-auto">
+          {gpsAccuracyMeters && (
+            <span className="text-[10px] text-blue-800 bg-blue-100 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+              แม่นยำ ±{gpsAccuracyMeters}ม.
+            </span>
+          )}
           <span className="text-[10px] text-emerald-800 bg-emerald-100/90 font-bold px-2 py-0.5 rounded-full border border-emerald-300 shrink-0 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3 text-emerald-700" />
-            <span>พร้อมส่งพิกัด</span>
+            <span>พิกัดพร้อมส่ง</span>
           </span>
         </div>
       </div>
