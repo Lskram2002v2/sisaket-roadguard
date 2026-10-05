@@ -251,13 +251,29 @@ class RoadReportStore {
   }
 
   public async refreshFromSupabase(): Promise<RoadReport[]> {
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/reports', { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            this.reports = json.data;
+            this.save();
+            return this.reports;
+          }
+        }
+      } catch (err) {
+        console.warn('API /api/reports fetch failed, fallback to local store:', err);
+      }
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('road_reports')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) {
+        if (!error && Array.isArray(data) && data.length > 0) {
           this.reports = data;
           this.save();
           return data;
@@ -322,23 +338,23 @@ class RoadReportStore {
       } catch {
         // ignore
       }
-    }
 
-    if (isSupabaseConfigured && supabase) {
+      // บันทึกผ่าน REST API Endpoint /api/reports
       try {
-        const { id, ...supabasePayload } = report;
-        const { data, error } = await supabase
-          .from('road_reports')
-          .insert([supabasePayload])
-          .select();
-        if (!error && data && data[0]) {
-          report.id = data[0].id;
-          this.save();
-        } else if (error) {
-          console.warn('Supabase insert error:', error.message);
+        const res = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(report),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            report.id = json.data.id || report.id;
+            this.save();
+          }
         }
       } catch (err) {
-        console.warn('Supabase insert failed:', err);
+        console.warn('API /api/reports POST failed:', err);
       }
     }
 
@@ -525,6 +541,22 @@ class RoadReportStore {
   }
 
   public async refreshBannersFromSupabase(): Promise<SponsorBanner[]> {
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/banners', { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            this.banners = json.data;
+            this.saveBanners();
+            return this.getBannersInstant();
+          }
+        }
+      } catch (err) {
+        console.warn('API /api/banners fetch failed, fallback to local store:', err);
+      }
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -545,6 +577,7 @@ class RoadReportStore {
 
   public async saveBanner(bannerData: Omit<SponsorBanner, 'id' | 'created_at'> & { id?: string }): Promise<SponsorBanner> {
     let resultBanner: SponsorBanner;
+    const isExisting = Boolean(bannerData.id && this.banners.some((b) => b.id === bannerData.id));
 
     if (bannerData.id) {
       const idx = this.banners.findIndex((b) => b.id === bannerData.id);
@@ -584,23 +617,24 @@ class RoadReportStore {
 
     this.saveBanners();
 
-    if (isSupabaseConfigured && supabase) {
+    // REST API Sync: /api/banners
+    if (typeof window !== 'undefined') {
       try {
-        await supabase
-          .from('sponsor_banners')
-          .upsert({
-            id: resultBanner.id,
-            title: resultBanner.title,
-            subtitle: resultBanner.subtitle || null,
-            image_url: resultBanner.image_url,
-            target_link: resultBanner.target_link || null,
-            is_active: resultBanner.is_active,
-            order: resultBanner.order,
-            created_at: resultBanner.created_at,
-            updated_at: new Date().toISOString(),
+        if (isExisting) {
+          await fetch('/api/banners', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update', banner: resultBanner }),
           });
+        } else {
+          await fetch('/api/banners', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(resultBanner),
+          });
+        }
       } catch (err) {
-        console.warn('Supabase upsert banner failed:', err);
+        console.warn('API /api/banners write failed:', err);
       }
     }
 
@@ -614,11 +648,13 @@ class RoadReportStore {
     this.banners.splice(idx, 1);
     this.saveBanners();
 
-    if (isSupabaseConfigured && supabase) {
+    if (typeof window !== 'undefined') {
       try {
-        await supabase.from('sponsor_banners').delete().eq('id', id);
+        await fetch(`/api/banners?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        });
       } catch (err) {
-        console.warn('Supabase delete banner failed:', err);
+        console.warn('API /api/banners DELETE failed:', err);
       }
     }
 
@@ -631,14 +667,15 @@ class RoadReportStore {
     target.is_active = !target.is_active;
     this.saveBanners();
 
-    if (isSupabaseConfigured && supabase) {
+    if (typeof window !== 'undefined') {
       try {
-        await supabase
-          .from('sponsor_banners')
-          .update({ is_active: target.is_active, updated_at: new Date().toISOString() })
-          .eq('id', id);
+        await fetch('/api/banners', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'toggle', id }),
+        });
       } catch (err) {
-        console.warn('Supabase toggle banner failed:', err);
+        console.warn('API /api/banners toggle failed:', err);
       }
     }
 
@@ -652,16 +689,15 @@ class RoadReportStore {
     });
     this.saveBanners();
 
-    if (isSupabaseConfigured && supabase) {
+    if (typeof window !== 'undefined') {
       try {
-        for (let i = 0; i < orderedIds.length; i++) {
-          await supabase
-            .from('sponsor_banners')
-            .update({ order: i + 1, updated_at: new Date().toISOString() })
-            .eq('id', orderedIds[i]);
-        }
+        await fetch('/api/banners', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reorder', orderedIds }),
+        });
       } catch (err) {
-        console.warn('Supabase reorder banners failed:', err);
+        console.warn('API /api/banners reorder failed:', err);
       }
     }
 
@@ -684,6 +720,22 @@ class RoadReportStore {
   }
 
   public async refreshThemeFromSupabase(): Promise<HeaderThemeConfig> {
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/settings?key=header_theme', { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            this.theme = json.data as HeaderThemeConfig;
+            this.saveTheme();
+            return { ...this.theme };
+          }
+        }
+      } catch (err) {
+        console.warn('API /api/settings fetch failed:', err);
+      }
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -711,17 +763,15 @@ class RoadReportStore {
     };
     this.saveTheme();
 
-    if (isSupabaseConfigured && supabase) {
+    if (typeof window !== 'undefined') {
       try {
-        await supabase
-          .from('system_settings')
-          .upsert({
-            key: 'header_theme',
-            value: this.theme,
-            updated_at: this.theme.updated_at,
-          });
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'header_theme', value: this.theme }),
+        });
       } catch (err) {
-        console.warn('Supabase update theme failed:', err);
+        console.warn('API /api/settings update failed:', err);
       }
     }
 
