@@ -32,3 +32,23 @@ export interface SisaketDistrict {
   lat: number;
   lng: number;
 }
+
+export interface SponsorBanner {
+  id: string;
+  title: string;
+  subtitle?: string;
+  image_url: string;
+  target_link?: string;
+  is_active: boolean;
+  order: number;
+  created_at: string;
+}
+
+export interface HeaderThemeConfig {
+  mode: 'preset' | 'custom';
+  custom_images: string[];
+  banner_speed_seconds?: number;
+  overlay_darkness?: number; // 0 - 100%
+  updated_at: string;
+}
+

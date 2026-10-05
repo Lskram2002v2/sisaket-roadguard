@@ -8,6 +8,7 @@ import CitizenReportForm from '@/components/CitizenReportForm';
 import CitizenTrackingPortal from '@/components/CitizenTrackingPortal';
 import PublicMapFeed from '@/components/PublicMapFeed';
 import UserOnboardingTour from '@/components/UserOnboardingTour';
+import SponsorBannerCarousel from '@/components/SponsorBannerCarousel';
 
 type MainTab = 'report' | 'track' | 'feed';
 
@@ -88,6 +89,9 @@ export default function HomePage() {
             <PublicMapFeed />
           </div>
         </div>
+
+        {/* Dynamic Sponsor & Public Relations Banner Carousel */}
+        <SponsorBannerCarousel />
       </div>
 
       {/* Interactive User Onboarding, Spotlight Guided Tour & Checklist */}

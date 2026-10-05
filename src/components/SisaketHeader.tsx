@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Sparkles, MapPin, ShieldCheck, Compass, CheckCircle2, Clock, Wrench } from 'lucide-react';
 import { roadStore } from '@/lib/db-store';
-import { RoadReport } from '@/lib/types';
+import { RoadReport, HeaderThemeConfig } from '@/lib/types';
+import { normalizeImageUrl } from '@/lib/image-helper';
 
-// แกลเลอรีสถานที่ท่องเที่ยวและแลนด์มาร์กสำคัญของจังหวัดศรีสะเกษ
+// แกลเลอรีสถานที่ท่องเที่ยวและแลนด์มาร์กสำคัญของจังหวัดศรีสะเกษ (เริ่มต้น)
 const SISAKET_LANDMARKS = [
   {
     title: 'ผามออีแดง & เขาพระวิหาร',
@@ -41,38 +42,72 @@ interface SisaketHeaderProps {
 export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [reports, setReports] = useState<RoadReport[]>([]);
+  const [themeConfig, setThemeConfig] = useState<HeaderThemeConfig>({
+    mode: 'preset',
+    custom_images: [],
+    banner_speed_seconds: 5,
+    overlay_darkness: 75,
+    updated_at: new Date().toISOString(),
+  });
 
   useEffect(() => {
     const fetch = async () => {
       const data = await roadStore.getAllReports();
       setReports(data);
+      const theme = await roadStore.getThemeConfig();
+      setThemeConfig(theme);
     };
     fetch();
-    const unsub = roadStore.subscribe(() => fetch());
 
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % SISAKET_LANDMARKS.length);
-    }, 5000);
+    const unsub = roadStore.subscribe(async () => {
+      const data = await roadStore.getAllReports();
+      setReports(data);
+      const theme = await roadStore.getThemeConfig();
+      setThemeConfig(theme);
+    });
 
     return () => {
       unsub();
-      clearInterval(timer);
     };
   }, []);
+
+  // Compute active slides based on theme configuration
+  const slides =
+    themeConfig.mode === 'custom' && themeConfig.custom_images && themeConfig.custom_images.length > 0
+      ? themeConfig.custom_images.map((url, idx) => ({
+          title: `ศรีสะเกษเมืองน่าอยู่ (#${idx + 1})`,
+          district: 'จังหวัดศรีสะเกษ',
+          img: normalizeImageUrl(url),
+          tag: 'ภาพประชาสัมพันธ์',
+        }))
+      : SISAKET_LANDMARKS;
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const intervalMs = (themeConfig.banner_speed_seconds || 5) * 1000;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [slides.length, themeConfig.banner_speed_seconds]);
 
   const total = reports.length;
   const inProgress = reports.filter((r) => r.status === 'IN_PROGRESS' || r.status === 'VERIFIED').length;
   const resolved = reports.filter((r) => r.status === 'RESOLVED').length;
 
+  const activeSlideIndex = currentSlide % (slides.length || 1);
+  const activeSlide = slides[activeSlideIndex] || SISAKET_LANDMARKS[0];
+
   return (
     <header className="relative w-full overflow-hidden rounded-b-3xl bg-stone-900 text-white shadow-xl">
       {/* Background Slideshow with subtle overlay */}
       <div className="absolute inset-0 z-0">
-        {SISAKET_LANDMARKS.map((item, idx) => (
+        {slides.map((item, idx) => (
           <div
             key={idx}
             className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${
-              idx === currentSlide ? 'opacity-40 scale-105' : 'opacity-0 scale-100'
+              idx === activeSlideIndex ? 'opacity-40 scale-105' : 'opacity-0 scale-100'
             }`}
             style={{
               backgroundImage: `url(${item.img})`,
@@ -134,16 +169,16 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
         <div className="flex items-center justify-between text-[11px] text-stone-300 bg-black/40 backdrop-blur-md rounded-xl px-3 py-1.5 border border-white/10">
           <div className="flex items-center gap-1.5 min-w-0 truncate">
             <Compass className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            <span className="truncate font-semibold text-stone-100">{SISAKET_LANDMARKS[currentSlide].title}</span>
-            <span className="text-stone-400 text-[10px] shrink-0">({SISAKET_LANDMARKS[currentSlide].district})</span>
+            <span className="truncate font-semibold text-stone-100">{activeSlide.title}</span>
+            <span className="text-stone-400 text-[10px] shrink-0">({activeSlide.district})</span>
           </div>
           <div className="flex gap-1 shrink-0 ml-2">
-            {SISAKET_LANDMARKS.map((_, i) => (
+            {slides.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentSlide(i)}
                 className={`h-1.5 rounded-full transition-all ${
-                  i === currentSlide ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-white/30'
+                  i === activeSlideIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-white/30'
                 }`}
                 aria-label={`Slide ${i + 1}`}
               />

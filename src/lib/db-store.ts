@@ -1,8 +1,53 @@
-import { RoadReport, ReportStatus, SeverityLevel } from './types';
+import { RoadReport, ReportStatus, SeverityLevel, SponsorBanner, HeaderThemeConfig } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEY = 'sisaket_roadguard_reports_v1';
 const MY_REPORTS_KEY = 'sisaket_my_reported_codes_v1';
+const BANNERS_STORAGE_KEY = 'sisaket_roadguard_banners_v1';
+const THEME_STORAGE_KEY = 'sisaket_roadguard_theme_v1';
+
+// Default sponsor / public relations banners for Sisaket Province
+const INITIAL_BANNERS: SponsorBanner[] = [
+  {
+    id: 'ban-001',
+    title: 'โครงการ Sisaket Smart City ร่วมใจถนนสวย ไร้หลุม',
+    subtitle: 'ขับเคลื่อนโดย แขวงทางหลวงศรีสะเกษ และ องค์กรปกครองส่วนท้องถิ่น 22 อำเภอ',
+    image_url: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1200&auto=format&fit=crop&q=80',
+    target_link: 'https://sisaket.go.th',
+    is_active: true,
+    order: 1,
+    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: 'ban-002',
+    title: 'ส่งเสริมการท่องเที่ยวศรีสะเกษ ดินแดนปราสาทขอม & ผามออีแดง',
+    subtitle: 'ขับขี่ปลอดภัย สัญจรสะดวก เชื่อมโยงทุกเส้นทางสู่แลนด์มาร์กสำคัญ',
+    image_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80',
+    target_link: 'https://sisaket.go.th',
+    is_active: true,
+    order: 2,
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: 'ban-003',
+    title: 'สายด่วนแจ้งเหตุฉุกเฉินบนทางหลวง 1586 • กู้ภัย 1669 ตลอด 24 ชม.',
+    subtitle: 'ศูนย์รับแจ้งเหตุเร่งด่วน พร้อมทีมช่างเคลื่อนที่เร็วเข้าตรวจสอบจุดเสี่ยง',
+    image_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&auto=format&fit=crop&q=80',
+    target_link: 'tel:1586',
+    is_active: true,
+    order: 3,
+    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+  },
+];
+
+const INITIAL_THEME: HeaderThemeConfig = {
+  mode: 'preset',
+  custom_images: [],
+  banner_speed_seconds: 5,
+  overlay_darkness: 75,
+  updated_at: new Date().toISOString(),
+};
+
 
 // ข้อมูลตัวอย่างสมจริงในจังหวัดศรีสะเกษ
 const INITIAL_REPORTS: RoadReport[] = [
@@ -88,6 +133,8 @@ const INITIAL_REPORTS: RoadReport[] = [
 
 class RoadReportStore {
   private reports: RoadReport[] = [];
+  private banners: SponsorBanner[] = [];
+  private theme: HeaderThemeConfig = { ...INITIAL_THEME };
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -107,14 +154,54 @@ class RoadReportStore {
         this.reports = [...INITIAL_REPORTS];
         this.save();
       }
+
+      const storedBanners = localStorage.getItem(BANNERS_STORAGE_KEY);
+      if (storedBanners) {
+        try {
+          this.banners = JSON.parse(storedBanners);
+        } catch {
+          this.banners = [...INITIAL_BANNERS];
+        }
+      } else {
+        this.banners = [...INITIAL_BANNERS];
+        this.saveBanners();
+      }
+
+      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      if (storedTheme) {
+        try {
+          this.theme = JSON.parse(storedTheme);
+        } catch {
+          this.theme = { ...INITIAL_THEME };
+        }
+      } else {
+        this.theme = { ...INITIAL_THEME };
+        this.saveTheme();
+      }
     } else {
       this.reports = [...INITIAL_REPORTS];
+      this.banners = [...INITIAL_BANNERS];
+      this.theme = { ...INITIAL_THEME };
     }
   }
 
   private save() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.reports));
+      this.notifyListeners();
+    }
+  }
+
+  private saveBanners() {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(BANNERS_STORAGE_KEY, JSON.stringify(this.banners));
+      this.notifyListeners();
+    }
+  }
+
+  private saveTheme() {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(this.theme));
       this.notifyListeners();
     }
   }
@@ -403,6 +490,90 @@ class RoadReportStore {
     } catch {
       return [];
     }
+  }
+
+  // ================= SPONSOR BANNERS MANAGEMENT =================
+  public getBannersInstant(): SponsorBanner[] {
+    return [...this.banners].sort((a, b) => a.order - b.order);
+  }
+
+  public async getAllBanners(): Promise<SponsorBanner[]> {
+    return this.getBannersInstant();
+  }
+
+  public async saveBanner(bannerData: Omit<SponsorBanner, 'id' | 'created_at'> & { id?: string }): Promise<SponsorBanner> {
+    if (bannerData.id) {
+      const idx = this.banners.findIndex((b) => b.id === bannerData.id);
+      if (idx !== -1) {
+        const updated: SponsorBanner = {
+          ...this.banners[idx],
+          ...bannerData,
+        };
+        this.banners[idx] = updated;
+        this.saveBanners();
+        return updated;
+      }
+    }
+
+    const newBanner: SponsorBanner = {
+      id: `ban-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: bannerData.title || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
+      subtitle: bannerData.subtitle,
+      image_url: bannerData.image_url,
+      target_link: bannerData.target_link,
+      is_active: bannerData.is_active ?? true,
+      order: bannerData.order ?? (this.banners.length + 1),
+      created_at: new Date().toISOString(),
+    };
+
+    this.banners.push(newBanner);
+    this.saveBanners();
+    return newBanner;
+  }
+
+  public async deleteBanner(id: string): Promise<boolean> {
+    const idx = this.banners.findIndex((b) => b.id === id);
+    if (idx === -1) return false;
+
+    this.banners.splice(idx, 1);
+    this.saveBanners();
+    return true;
+  }
+
+  public async toggleBannerActive(id: string): Promise<boolean> {
+    const target = this.banners.find((b) => b.id === id);
+    if (!target) return false;
+    target.is_active = !target.is_active;
+    this.saveBanners();
+    return target.is_active;
+  }
+
+  public async reorderBanners(orderedIds: string[]): Promise<boolean> {
+    orderedIds.forEach((id, index) => {
+      const b = this.banners.find((item) => item.id === id);
+      if (b) b.order = index + 1;
+    });
+    this.saveBanners();
+    return true;
+  }
+
+  // ================= THEME & HEADER MANAGEMENT =================
+  public getThemeConfigInstant(): HeaderThemeConfig {
+    return { ...this.theme };
+  }
+
+  public async getThemeConfig(): Promise<HeaderThemeConfig> {
+    return this.getThemeConfigInstant();
+  }
+
+  public async updateThemeConfig(updates: Partial<HeaderThemeConfig>): Promise<HeaderThemeConfig> {
+    this.theme = {
+      ...this.theme,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.saveTheme();
+    return { ...this.theme };
   }
 }
 

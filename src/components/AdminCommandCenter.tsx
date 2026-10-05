@@ -42,6 +42,7 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { SISAKET_DISTRICTS, SISAKET_CENTER } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
 import { audioNotification, playAlertChime } from '@/lib/audio-synth';
+import AdminSettingsModal from '@/components/AdminSettingsModal';
 
 type FilterType = 'ALL' | 'URGENT' | 'TODAY' | 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
 
@@ -66,6 +67,7 @@ export default function AdminCommandCenter() {
   const [errorPin, setErrorPin] = useState(false);
   const [zoomPhoto, setZoomPhoto] = useState<string | null>(null);
   const [showDbModal, setShowDbModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Real-time Notification & Audio States
   const [isMuted, setIsMuted] = useState(false);
@@ -733,6 +735,15 @@ export default function AdminCommandCenter() {
             )}
           </div>
 
+          {/* Settings Modal Trigger (Small Gear Icon ⚙️ next to Bell) */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="relative flex items-center justify-center rounded-xl bg-white/10 p-2 text-stone-200 hover:bg-white/20 hover:text-amber-400 transition-all border border-white/10 active:scale-95"
+            title="ตั้งค่าระบบ & ป้ายประชาสัมพันธ์ / ผู้สนับสนุน"
+          >
+            <Settings className="h-4 w-4 text-amber-400" />
+          </button>
+
           {/* Database Connection Pill */}
           <button
             onClick={() => setShowDbModal(true)}
@@ -757,6 +768,12 @@ export default function AdminCommandCenter() {
           </button>
         </div>
       </div>
+
+      {/* Admin Settings & Sponsor Banners Modal */}
+      <AdminSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
 
       {/* Database Setup & Health Modal */}
       {showDbModal && (
