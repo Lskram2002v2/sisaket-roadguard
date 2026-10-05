@@ -8,6 +8,7 @@ import DualPhotoUploader from './DualPhotoUploader';
 import { SISAKET_CENTER, isWithinSisaket } from '@/lib/geofence';
 import { roadStore } from '@/lib/db-store';
 import { playAlertChime } from '@/lib/audio-synth';
+import { uploadDataUrlToStorage } from '@/lib/image-processor';
 import { SeverityLevel } from '@/lib/types';
 
 const QUICK_LANDMARK_CHIPS = [
@@ -79,6 +80,12 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
       const randomNum = Math.floor(1000 + Math.random() * 9000);
       const generatedCode = `${trackingCodePreview}-${randomNum}`;
 
+      // อัปโหลดรูปทั้ง 2 รูปขึ้น Cloud Storage แบบขนาน (Parallel Uploads)
+      const [uploadedCtxUrl, uploadedDmgUrl] = await Promise.all([
+        uploadDataUrlToStorage(contextPhoto, generatedCode, 'ctx'),
+        uploadDataUrlToStorage(closeupPhoto, generatedCode, 'dmg'),
+      ]);
+
       const newReport = await roadStore.addReport({
         tracking_code: generatedCode,
         reporter_phone: cleanPhone,
@@ -86,8 +93,8 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
         longitude: lng,
         district: district,
         landmark_description: landmark.trim(),
-        photo_context_url: contextPhoto,
-        photo_closeup_url: closeupPhoto,
+        photo_context_url: uploadedCtxUrl,
+        photo_closeup_url: uploadedDmgUrl,
         severity_level: severity,
         status: 'PENDING',
       });
