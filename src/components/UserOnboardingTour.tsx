@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Sparkles,
   HelpCircle,
@@ -16,7 +16,6 @@ import {
   Compass,
   Award,
   Layers,
-  Flame,
   ArrowRight,
 } from 'lucide-react';
 
@@ -34,45 +33,45 @@ const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'tour-tab-switcher',
     title: '3 ฟังก์ชันหลักเพื่อชาวศรีสะเกษ',
-    description: 'เลือกสลับระหว่าง "แจ้งถนนชำรุด", "ติดตามสถานะงานซ่อม" และ "แผนที่รวม 22 อำเภอ" ได้อย่างสะดวกรวดเร็วในคลิกเดียว',
+    description: 'เลือกสลับระหว่าง "แจ้งถนนชำรุด", "ติดตามสถานะงานซ่อม" และ "แผนที่รวม 22 อำเภอ" ได้สะดวกรวดเร็วในคลิกเดียว',
     badge: 'ขั้นตอนที่ 1 / 5',
-    tip: '💡 ระบบโหลดข้อมูลแบบ Instant SWR 0ms สลับแท็บได้ลื่นไหลไม่มีสะดุด',
-    position: 'bottom',
-  },
-  {
-    targetId: 'tour-photo-section',
-    targetTab: 'report',
-    title: 'ถ่ายภาพ 2 มุมมอง (ระยะใกล้ & ไกล)',
-    description: 'ช่วยให้ทีมช่างวิเคราะห์ขนาดหลุมผิวทางและความเร่งด่วนได้อย่างแม่นยำ พร้อมบันทึกภาพถ่ายดาวเทียมอัตโนมัติ',
-    badge: 'ขั้นตอนที่ 2 / 5',
-    tip: '📸 ถ่ายให้เห็นเสาไฟฟ้า อาคาร หรือจุดสังเกตเพื่อความรวดเร็วในการลงพื้นที่',
+    tip: '💡 สลับแท็บได้สะดวกลื่นไหล 0ms โหลดข้อมูลทันที',
     position: 'bottom',
   },
   {
     targetId: 'tour-location-section',
     targetTab: 'report',
-    title: 'ท่าที่ 1: ดึง GPS มือถืออัตโนมัติ • ท่าที่ 2: ปักหมุดเอง',
-    description: 'ระบบจะดึงพิกัดดาวเทียมความแม่นยำสูง (5-10 เมตร) จากมือถือของคุณ แล้วป้อนค่าพิกัดลงในฟอร์มและเลื่อนหมุดให้อัตโนมัติทันที และกรณีจำเป็นสามารถลากหมุดสีทองเพื่อปรับจุดชำรุดได้',
+    title: '1. ระบบพิกัด GPS ดาวเทียม & ปักหมุด',
+    description: 'ระบบจะดึงพิกัดจาก GPS มือถือความแม่นยำสูง (5-10 เมตร) ให้แบบเรียลไทม์ หรือสามารถแตะลากหมุดสีทองเพื่อปรับจุดชำรุดได้เอง',
+    badge: 'ขั้นตอนที่ 2 / 5',
+    tip: '📍 กด "ดึงพิกัด GPS มือถือ" เพื่อล็อกตำแหน่งจริง หรือลากหมุดบนแผนที่',
+    position: 'top',
+  },
+  {
+    targetId: 'tour-photo-section',
+    targetTab: 'report',
+    title: '2. ถ่ายภาพหลักฐาน 2 มุมมอง',
+    description: 'ถ่ายภาพระยะใกล้ (เห็นขนาดหลุม) และภาพมุมกว้าง (เห็นถนน/เสาไฟ/จุดสังเกต) เพื่อให้ทีมช่างประเมินการซ่อมได้แม่นยำ',
     badge: 'ขั้นตอนที่ 3 / 5',
-    tip: '📍 ท่าที่ 1 (หลัก): กดดึงตำแหน่งปัจจุบันอัตโนมัติ • ท่าที่ 2: ลากหมุดปักเองเมื่อจำเป็น',
+    tip: '📸 สามารถเลือกถ่ายสดจากกล้อง หรืออัปโหลดจากแกลเลอรีในมือถือได้',
     position: 'top',
   },
   {
     targetId: 'tour-tab-track-btn',
     targetTab: 'track',
-    title: 'ติดตามสถานะงานซ่อมแบบเรียลไทม์',
-    description: 'ตรวจสอบขั้นตอนการดำเนินงาน (รับเรื่อง ➡️ กำลังซ่อม ➡️ ซ่อมเสร็จสิ้น) พร้อมดูภาพถ่ายหลังซ่อมและร่วมให้คะแนนความพึงพอใจ',
+    title: '3. ติดตามสถานะงานซ่อมแบบเรียลไทม์',
+    description: 'ตรวจเช็คขั้นตอนการซ่อม (รับเรื่อง ➡️ กำลังซ่อม ➡️ ซ่อมเสร็จสิ้น) พร้อมดูภาพหลังซ่อมและร่วมให้คะแนนทีมช่าง',
     badge: 'ขั้นตอนที่ 4 / 5',
-    tip: '🔍 ค้นหาด้วยรหัสติดตาม เช่น SSK-2026-XXXX หรือเบอร์โทรศัพท์',
+    tip: '🔍 ค้นหาด้วยรหัสเคส (เช่น SK2603-XXXX) หรือเบอร์โทรศัพท์ 10 หลัก',
     position: 'bottom',
   },
   {
     targetId: 'tour-tab-feed-btn',
     targetTab: 'feed',
-    title: 'แผนที่สาธารณะ & จุดเสี่ยง 22 อำเภอ',
-    description: 'ดูภาพรวมถนนที่กำลังซ่อมแซมทั่วทั้งจังหวัดศรีสะเกษ พร้อมเส้นแบ่งขอบเขตอำเภอแบบ GeoJSON ที่มีความแม่นยำสูง',
+    title: '4. แผนที่ภาพรวมความปลอดภัย 22 อำเภอ',
+    description: 'สำรวจจุดเสี่ยงและเส้นทางที่กำลังซ่อมแซมทั่วทั้ง 22 อำเภอใน จ.ศรีสะเกษ พร้อมระบบนำทาง Google Maps',
     badge: 'ขั้นตอนที่ 5 / 5',
-    tip: '🗺️ กดดูการ์ดเคสเพื่อเปิด Google Maps นำทางไปยังจุดเกิดเหตุได้ทันที',
+    tip: '🗺️ แตะการ์ดเคสเพื่อเปิด Google Maps นำทางไปยังจุดเกิดเหตุได้ทันที',
     position: 'bottom',
   },
 ];
@@ -100,6 +99,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
   const [isChecklistCompleted, setIsChecklistCompleted] = useState(false);
 
   const [mounted, setMounted] = useState(false);
+  const rafIdRef = useRef<number | null>(null);
 
   // Initialize on mount
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
     const hasWelcomed = localStorage.getItem('sisaket_onboarding_welcomed');
     if (!hasWelcomed) {
-      const timer = setTimeout(() => setShowWelcomeModal(true), 600);
+      const timer = setTimeout(() => setShowWelcomeModal(true), 500);
       return () => clearTimeout(timer);
     }
 
@@ -156,36 +156,62 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
   const totalTasks = 3;
   const progressPercent = Math.round((completedCount / totalTasks) * 100);
 
-  // Update spotlight rect when step changes or window resizes
+  // Measure and update target spotlight position smoothly without lag
+  const updateSpotlightPosition = useCallback(() => {
+    if (!isTourActive) return;
+    const step = TOUR_STEPS[currentStepIdx];
+    if (!step) return;
+
+    const el = document.getElementById(step.targetId);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setTargetRect(rect);
+    } else {
+      setTargetRect(null);
+    }
+  }, [isTourActive, currentStepIdx]);
+
+  // Handle Step changes, tab synchronization and smooth scrolling
   useEffect(() => {
     if (!isTourActive) return;
 
     const step = TOUR_STEPS[currentStepIdx];
+    if (!step) return;
+
+    // Switch tab if step belongs to another tab
     if (step.targetTab && step.targetTab !== activeTab) {
       onSwitchTab(step.targetTab);
     }
 
-    const updatePosition = () => {
+    const scrollToAndMeasure = () => {
       const el = document.getElementById(step.targetId);
       if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Measure immediately and again after scroll settle
         const rect = el.getBoundingClientRect();
         setTargetRect(rect);
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        setTargetRect(null);
       }
     };
 
-    const timer = setTimeout(updatePosition, 300);
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    // Small immediate timeout for React to mount tab if needed (50ms instead of 300ms)
+    const timer = setTimeout(scrollToAndMeasure, 60);
+
+    // Continuous 60fps sync during scrolling/resizing
+    const handleScrollOrResize = () => {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(updateSpotlightPosition);
+    };
+
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+    window.addEventListener('scroll', handleScrollOrResize, { passive: true, capture: true });
 
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
     };
-  }, [isTourActive, currentStepIdx, activeTab]);
+  }, [isTourActive, currentStepIdx, activeTab, onSwitchTab, updateSpotlightPosition]);
 
   const handleStartTour = () => {
     setShowWelcomeModal(false);
@@ -198,7 +224,6 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
     setIsTourActive(false);
     setShowWelcomeModal(false);
     localStorage.setItem('sisaket_onboarding_welcomed', 'true');
-    // Return to the first tab (Report) and scroll to top
     onSwitchTab('report');
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -212,7 +237,6 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
       setIsTourActive(false);
       localStorage.setItem('sisaket_onboarding_welcomed', 'true');
       setIsChecklistOpen(true);
-      // Return to the first tab (Report) and scroll to top!
       onSwitchTab('report');
       if (typeof window !== 'undefined') {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -271,8 +295,8 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                   <MapPin className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-stone-900">1. ล็อกพิกัดดาวเทียม GPS ความแม่นยำสูง</h4>
-                  <p className="text-[11px] text-stone-600">บังคับเปิด GPS เพื่อล็อกตำแหน่งหลุมแม่นยำ 5-10 ม. (หรือปักหมุดเองได้กรณีไม่มีสัญญาณ)</p>
+                  <h4 className="text-xs font-bold text-stone-900">1. ระบุพิกัด GPS ดาวเทียมแม่นยำสูง</h4>
+                  <p className="text-[11px] text-stone-600">ดึงพิกัดจากมือถืออัตโนมัติแม่นยำ 5-10 ม. (หรือปักหมุดเองได้)</p>
                 </div>
               </div>
 
@@ -319,13 +343,13 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
         </div>
       )}
 
-      {/* 2. Interactive Guided Tour (Crystal-Clear Cutout Spotlight & Coach Mark Tooltip) */}
+      {/* 2. Interactive Guided Tour (Silky-Smooth Snappy Spotlight & Coach Mark Tooltip) */}
       {isTourActive && step && (
         <div className="fixed inset-0 z-[9998] pointer-events-auto">
-          {/* Crystal-Clear Spotlight with Giant Box-Shadow (No blur on highlighted target!) */}
+          {/* Snappy Spring Hardware-Accelerated Spotlight Cutout */}
           {targetRect ? (
             <div
-              className="fixed rounded-2xl ring-4 ring-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.7)] pointer-events-none transition-all duration-300 ease-out z-[9998]"
+              className="fixed rounded-2xl ring-4 ring-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.7)] pointer-events-none z-[9998]"
               style={{
                 top: `${Math.max(4, targetRect.top - 6)}px`,
                 left: `${Math.max(4, targetRect.left - 6)}px`,
@@ -333,10 +357,12 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                 height: `${targetRect.height + 12}px`,
                 boxShadow: '0 0 0 9999px rgba(12, 10, 9, 0.78)',
                 backgroundColor: 'transparent',
+                transition: 'top 180ms cubic-bezier(0.16, 1, 0.3, 1), left 180ms cubic-bezier(0.16, 1, 0.3, 1), width 180ms cubic-bezier(0.16, 1, 0.3, 1), height 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+                willChange: 'top, left, width, height',
               }}
             />
           ) : (
-            <div className="fixed inset-0 bg-stone-950/78 backdrop-blur-[1px] transition-all duration-300 z-[9998]" />
+            <div className="fixed inset-0 bg-stone-950/78 backdrop-blur-[1px] transition-opacity duration-200 z-[9998]" />
           )}
 
           {/* Coach Mark / Tooltip Dialog */}
@@ -345,9 +371,10 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
             style={{
               top: targetRect
                 ? step.position === 'top'
-                  ? Math.max(16, targetRect.top - 240)
-                  : Math.min(window.innerHeight - 260, targetRect.bottom + 16)
+                  ? Math.max(16, targetRect.top - 235)
+                  : Math.min(window.innerHeight - 250, targetRect.bottom + 14)
                 : '25%',
+              transition: 'top 180ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
             {/* Header with Step indicator */}
@@ -366,7 +393,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
             {/* Title & Description */}
             <div>
               <h4 className="text-base font-extrabold text-stone-900 flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-amber-600" />
+                <Sparkles className="h-4 w-4 text-amber-600 shrink-0" />
                 <span>{step.title}</span>
               </h4>
               <p className="text-xs text-stone-600 mt-1 leading-relaxed">
@@ -376,7 +403,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
             {/* Pro Tip */}
             {step.tip && (
-              <div className="rounded-xl bg-amber-50 p-2.5 text-[11px] text-amber-900 border border-amber-200">
+              <div className="rounded-xl bg-amber-50 p-2 text-[11px] text-amber-900 border border-amber-200">
                 {step.tip}
               </div>
             )}
@@ -388,7 +415,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                 {TOUR_STEPS.map((_, idx) => (
                   <span
                     key={idx}
-                    className={`h-2 rounded-full transition-all ${
+                    className={`h-2 rounded-full transition-all duration-200 ${
                       idx === currentStepIdx
                         ? 'w-5 bg-amber-600'
                         : idx < currentStepIdx
@@ -404,7 +431,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                 {currentStepIdx > 0 && (
                   <button
                     onClick={handlePrevStep}
-                    className="flex items-center gap-1 rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-200"
+                    className="flex items-center gap-1 rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-700 hover:bg-stone-200 active:scale-95 transition-all"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                     <span>ก่อนหน้า</span>
@@ -413,7 +440,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
                 <button
                   onClick={handleNextStep}
-                  className="flex items-center gap-1 rounded-xl bg-amber-600 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:bg-amber-700"
+                  className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:from-amber-700 hover:to-amber-600 active:scale-95 transition-all"
                 >
                   <span>{currentStepIdx === TOUR_STEPS.length - 1 ? 'เสร็จสิ้น 🎉' : 'ถัดไป'}</span>
                   {currentStepIdx < TOUR_STEPS.length - 1 && <ChevronRight className="h-3.5 w-3.5" />}
