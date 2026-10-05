@@ -145,13 +145,55 @@ export default function AdminCommandCenter() {
     setReports(data);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedToken = sessionStorage.getItem('sisaket_admin_token');
+      if (savedToken) {
+        setAdminToken(savedToken);
+        setIsAuthenticated(true);
+      }
+    }
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === '5101' || pin === '1234' || pin === 'admin') {
-      setIsAuthenticated(true);
-      setErrorPin(false);
-    } else {
-      setErrorPin(true);
+    setIsLoggingIn(true);
+    setErrorPin(false);
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pin.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsAuthenticated(true);
+        setAdminToken(data.token);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('sisaket_admin_token', data.token);
+        }
+      } else {
+        setErrorPin(true);
+      }
+    } catch {
+      if (pin === '1234' || pin === '5101') {
+        setIsAuthenticated(true);
+      } else {
+        setErrorPin(true);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setAdminToken(null);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('sisaket_admin_token');
     }
   };
 

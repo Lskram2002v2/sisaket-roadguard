@@ -52,6 +52,18 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
     e.preventDefault();
     setErrorMsg(null);
 
+    // Anti-Spam Rate Limit Check (15s cooldown per device)
+    if (typeof window !== 'undefined') {
+      const lastSubmit = localStorage.getItem('sisaket_last_submission_time');
+      if (lastSubmit) {
+        const elapsed = (Date.now() - parseInt(lastSubmit, 10)) / 1000;
+        if (elapsed < 15) {
+          setErrorMsg(`กรุณารอสักครู่ (${Math.ceil(15 - elapsed)} วินาที) ก่อนส่งรายงานถัดไป เพื่อป้องกันระบบสแปม`);
+          return;
+        }
+      }
+    }
+
     // Validation
     if (!isWithinSisaket(lat, lng)) {
       setErrorMsg('พิกัดอยู่นอกพื้นที่ 22 อำเภอ จังหวัดศรีสะเกษ');
@@ -100,6 +112,9 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
       });
 
       setSubmittedCode(newReport.tracking_code);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sisaket_last_submission_time', String(Date.now()));
+      }
       playAlertChime('success');
 
       // Trigger Confetti
