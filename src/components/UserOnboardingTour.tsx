@@ -17,6 +17,9 @@ import {
   Award,
   Layers,
   ArrowRight,
+  FileText,
+  Phone,
+  ShieldCheck,
 } from 'lucide-react';
 
 export interface TourStep {
@@ -31,47 +34,48 @@ export interface TourStep {
 
 const TOUR_STEPS: TourStep[] = [
   {
-    targetId: 'tour-tab-switcher',
-    title: '3 ฟังก์ชันหลักเพื่อชาวศรีสะเกษ',
-    description: 'เลือกสลับระหว่าง "แจ้งถนนชำรุด", "ติดตามสถานะงานซ่อม" และ "แผนที่รวม 22 อำเภอ" ได้สะดวกรวดเร็วในคลิกเดียว',
-    badge: 'ขั้นตอนที่ 1 / 5',
-    tip: '💡 สลับแท็บได้สะดวกลื่นไหล 0ms โหลดข้อมูลทันที',
-    position: 'bottom',
-  },
-  {
     targetId: 'tour-location-section',
     targetTab: 'report',
-    title: '1. ระบบพิกัด GPS ดาวเทียม & ปักหมุด',
-    description: 'ระบบจะดึงพิกัดจาก GPS มือถือความแม่นยำสูง (5-10 เมตร) ให้แบบเรียลไทม์ หรือสามารถแตะลากหมุดสีทองเพื่อปรับจุดชำรุดได้เอง',
-    badge: 'ขั้นตอนที่ 2 / 5',
-    tip: '📍 กด "ดึงพิกัด GPS มือถือ" เพื่อล็อกตำแหน่งจริง หรือลากหมุดบนแผนที่',
+    title: '1. แตะดึงพิกัด GPS อัตโนมัติ (หรือลากหมุด)',
+    description: 'เมื่อยืนใกล้จุดชำรุด ให้แตะปุ่ม "📍 ดึงพิกัด GPS มือถือ" ระบบจะล็อกพิกัดดาวเทียมความแม่นยำสูง (5-10 เมตร) และเลือกอำเภอให้ทันที หรือหากแจ้งจากที่บ้าน สามารถใช้นิ้วลากหมุดสีทองไปวางบนจุดเกิดเหตุได้เอง',
+    badge: 'ขั้นตอนที่ 1 / 5',
+    tip: '💡 แตะปุ่มเดียว พิกัดและอำเภอจะถูกป้อนเข้าฟอร์มให้อัตโนมัติ ไม่ต้องพิมพ์ตัวเลขเอง',
     position: 'top',
   },
   {
     targetId: 'tour-photo-section',
     targetTab: 'report',
-    title: '2. ถ่ายภาพหลักฐาน 2 มุมมอง',
-    description: 'ถ่ายภาพระยะใกล้ (เห็นขนาดหลุม) และภาพมุมกว้าง (เห็นถนน/เสาไฟ/จุดสังเกต) เพื่อให้ทีมช่างประเมินการซ่อมได้แม่นยำ',
+    title: '2. แนบภาพหลักฐาน 2 รูป (มุมกว้าง + ระยะใกล้)',
+    description: '• รูปที่ 1 (ภาพมุมกว้าง): ถ่ายให้เห็นแนวถนน เสาไฟ อาคาร หรือทางแยก เพื่อให้ช่างขับรถมาถูกจุด\n• รูปที่ 2 (ภาพระยะใกล้): ถ่ายเจาะที่ตัวหลุม/รอยแตกร้าว เพื่อให้ช่างประเมินปริมาณยางมะตอยหรือหินคลุกได้ถูกต้อง',
+    badge: 'ขั้นตอนที่ 2 / 5',
+    tip: '📸 สามารถเลือกถ่ายสดจากกล้อง หรือกดเลือกรูปภาพที่เคยถ่ายเก็บไว้ในมือถือได้',
+    position: 'top',
+  },
+  {
+    targetId: 'tour-details-section',
+    targetTab: 'report',
+    title: '3. กรอกจุดสังเกต & เบอร์โทรติดต่อ (สำคัญ)',
+    description: 'แบ่งออกเป็น 2 ช่องที่ต้องกรอกดังนี้:\n\n1️⃣ ช่องจุดสังเกต: พิมพ์บอกจุดอ้างอิงริมทางที่มองเห็นชัดเจน เช่น "หน้าโรงเรียนบ้านดงกล้วย ตรงข้ามเสาไฟต้นที่ 3", "ก่อนถึงสะพาน 50 เมตร" หรือ "ตรงข้ามวัด" (มีปุ่มลัดด้านล่างให้แตะพิมพ์ไว)\n\n2️⃣ ช่องเบอร์โทรติดต่อ: กรอกเบอร์มือถือ 10 หลัก (เช่น 08XXXXXXXX) สำหรับให้เจ้าหน้าที่ อบจ. หรือแขวงทางหลวง โทรสอบถามเส้นทางหน้างาน',
     badge: 'ขั้นตอนที่ 3 / 5',
-    tip: '📸 สามารถเลือกถ่ายสดจากกล้อง หรืออัปโหลดจากแกลเลอรีในมือถือได้',
+    tip: '🔒 ข้อมูลปลอดภัยตาม PDPA: เบอร์โทรจะถูกซ่อนจากหน้าสาธารณะ มีเพียงเจ้าหน้าที่เท่านั้นที่เห็น',
     position: 'top',
   },
   {
     targetId: 'tour-tab-track-btn',
     targetTab: 'track',
-    title: '3. ติดตามสถานะงานซ่อมแบบเรียลไทม์',
-    description: 'ตรวจเช็คขั้นตอนการซ่อม (รับเรื่อง ➡️ กำลังซ่อม ➡️ ซ่อมเสร็จสิ้น) พร้อมดูภาพหลังซ่อมและร่วมให้คะแนนทีมช่าง',
+    title: '4. ติดตามสถานะงานซ่อมแบบเรียลไทม์',
+    description: 'หลังกดส่งรายงาน ระบบจะออกรหัสติดตาม (เช่น SK2603-XXXX) ให้อัตโนมัติ สามารถเข้ามาเช็คขั้นตอนการซ่อม (รับเรื่อง ➡️ กำลังซ่อม ➡️ ซ่อมเสร็จสิ้น) พร้อมดูภาพถ่ายหลังซ่อมและร่วมให้คะแนนความพึงพอใจได้ตลอด 24 ชม.',
     badge: 'ขั้นตอนที่ 4 / 5',
-    tip: '🔍 ค้นหาด้วยรหัสเคส (เช่น SK2603-XXXX) หรือเบอร์โทรศัพท์ 10 หลัก',
+    tip: '🔍 ระบบจำรหัสติดตามไว้ในเครื่องให้อัตโนมัติ ไม่ต้องสมัครสมาชิกหรือจำรหัสผ่าน',
     position: 'bottom',
   },
   {
     targetId: 'tour-tab-feed-btn',
     targetTab: 'feed',
-    title: '4. แผนที่ภาพรวมความปลอดภัย 22 อำเภอ',
-    description: 'สำรวจจุดเสี่ยงและเส้นทางที่กำลังซ่อมแซมทั่วทั้ง 22 อำเภอใน จ.ศรีสะเกษ พร้อมระบบนำทาง Google Maps',
+    title: '5. แผนที่ภาพรวมความปลอดภัย 22 อำเภอ',
+    description: 'สำรวจจุดแจ้งซ่อมถนนทั่วทั้ง 22 อำเภอใน จ.ศรีสะเกษ ดูภาพถ่ายสภาพถนนบนแผนที่ และสามารถแตะที่การ์ดเคสเพื่อเปิด Google Maps นำทางไปยังจุดเกิดเหตุได้ทันที',
     badge: 'ขั้นตอนที่ 5 / 5',
-    tip: '🗺️ แตะการ์ดเคสเพื่อเปิด Google Maps นำทางไปยังจุดเกิดเหตุได้ทันที',
+    tip: '🗺️ แตะการ์ดเคสเพื่อดูรูปถ่ายเปรียบเทียบและเส้นทางนำทาง',
     position: 'bottom',
   },
 ];
@@ -187,16 +191,13 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
       const el = document.getElementById(step.targetId);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Measure immediately and again after scroll settle
         const rect = el.getBoundingClientRect();
         setTargetRect(rect);
       }
     };
 
-    // Small immediate timeout for React to mount tab if needed (50ms instead of 300ms)
     const timer = setTimeout(scrollToAndMeasure, 60);
 
-    // Continuous 60fps sync during scrolling/resizing
     const handleScrollOrResize = () => {
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(updateSpotlightPosition);
@@ -302,21 +303,21 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
               <div className="flex items-start gap-3 rounded-2xl bg-purple-50/80 p-3 border border-purple-200/70">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm">
-                  <Search className="h-4 w-4" />
+                  <Camera className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-stone-900">2. ติดตามสถานะงานซ่อมสด</h4>
-                  <p className="text-[11px] text-stone-600">รู้ทุกขั้นตอนการดำเนินงาน พร้อมดูภาพหลังซ่อมและให้คะแนน</p>
+                  <h4 className="text-xs font-bold text-stone-900">2. ถ่ายภาพ 2 มุม & ใส่จุดสังเกต</h4>
+                  <p className="text-[11px] text-stone-600">ภาพมุมกว้าง+ระยะใกล้ พร้อมจุดสังเกตริมทางและเบอร์ติดต่อ</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3 rounded-2xl bg-emerald-50/80 p-3 border border-emerald-200/70">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
-                  <MapIcon className="h-4 w-4" />
+                  <Search className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-stone-900">3. แผนที่สาธารณะ 22 อำเภอ</h4>
-                  <p className="text-[11px] text-stone-600">สำรวจจุดแจ้งซ่อมและเส้นทางปลอดภัยทั่วศรีสะเกษแบบเรียลไทม์</p>
+                  <h4 className="text-xs font-bold text-stone-900">3. ติดตามสถานะ & แผนที่ 22 อำเภอ</h4>
+                  <p className="text-[11px] text-stone-600">เช็คคิวช่างสด ดูภาพหลังซ่อม และสำรวจแผนที่จุดเสี่ยงทั่วศรีสะเกษ</p>
                 </div>
               </div>
             </div>
@@ -328,7 +329,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 py-3 text-sm font-bold text-white shadow-lg shadow-amber-600/30 hover:from-amber-700 hover:to-amber-600 active:scale-[0.98] transition-all"
               >
                 <Compass className="h-4 w-4" />
-                <span>เริ่มทัวร์แนะนำการใช้งาน (5 สเต็ป)</span>
+                <span>เริ่มดูวิธีแจ้งซ่อมถนน (5 สเต็ปง่ายๆ)</span>
                 <ArrowRight className="h-4 w-4 ml-1" />
               </button>
 
@@ -371,8 +372,8 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
             style={{
               top: targetRect
                 ? step.position === 'top'
-                  ? Math.max(16, targetRect.top - 235)
-                  : Math.min(window.innerHeight - 250, targetRect.bottom + 14)
+                  ? Math.max(16, targetRect.top - 245)
+                  : Math.min(window.innerHeight - 260, targetRect.bottom + 14)
                 : '25%',
               transition: 'top 180ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
@@ -392,13 +393,13 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
             {/* Title & Description */}
             <div>
-              <h4 className="text-base font-extrabold text-stone-900 flex items-center gap-1.5">
+              <h4 className="text-sm sm:text-base font-extrabold text-stone-900 flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-amber-600 shrink-0" />
                 <span>{step.title}</span>
               </h4>
-              <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+              <div className="text-xs text-stone-600 mt-1 leading-relaxed whitespace-pre-line">
                 {step.description}
-              </p>
+              </div>
             </div>
 
             {/* Pro Tip */}
@@ -442,7 +443,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
                   onClick={handleNextStep}
                   className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:from-amber-700 hover:to-amber-600 active:scale-95 transition-all"
                 >
-                  <span>{currentStepIdx === TOUR_STEPS.length - 1 ? 'เสร็จสิ้น 🎉' : 'ถัดไป'}</span>
+                  <span>{currentStepIdx === TOUR_STEPS.length - 1 ? 'เริ่มใช้งานทันที 🎉' : 'ถัดไป'}</span>
                   {currentStepIdx < TOUR_STEPS.length - 1 && <ChevronRight className="h-3.5 w-3.5" />}
                 </button>
               </div>

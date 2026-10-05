@@ -242,7 +242,7 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
         </div>
 
         {/* Step 3: Mandatory Landmark & Phone */}
-        <div className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90 space-y-4">
+        <div id="tour-details-section" className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90 space-y-4">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white shadow-sm">
               3
