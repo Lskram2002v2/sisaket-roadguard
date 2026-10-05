@@ -204,8 +204,112 @@ export default function ReportMapPicker({
 
         mapInstanceRef.current = map;
         markerRef.current = marker;
+
+        // Auto-Trigger High-Accuracy Satellite GPS Lock on Mount
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          triggerAutoGpsLock(map, marker, L);
+        }
       }
     }
+
+    const triggerAutoGpsLock = (mapObj: any, markerObj: any, leafletObj: any) => {
+      setIsLocating(true);
+      setGpsStatusInfo({
+        type: 'info',
+        text: '🛰️ กำลังระบุพิกัดดาวเทียม GPS อัตโนมัติความแม่นยำสูง...',
+      });
+
+      let bestAcc = Infinity;
+      let bestPosition: GeolocationPosition | null = null;
+      let count = 0;
+
+      const autoTimeout = setTimeout(() => {
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        setIsLocating(false);
+        if (bestPosition) {
+          applyLocation(bestPosition);
+        } else {
+          setGpsStatusInfo({
+            type: 'warning',
+            text: '⚠️ เปิดโหมดปักหมุดเอง: ท่านสามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่/ถนนได้ทันที',
+          });
+        }
+      }, 5000);
+
+      const applyLocation = (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = Math.round(pos.coords.accuracy || 10);
+
+        if (isWithinSisaket(lat, lng)) {
+          if (accuracyCircleRef.current && mapObj) {
+            mapObj.removeLayer(accuracyCircleRef.current);
+          }
+          if (mapObj && markerObj) {
+            accuracyCircleRef.current = leafletObj.circle([lat, lng], {
+              radius: accuracy,
+              color: '#2563EB',
+              weight: 2,
+              fillColor: '#3B82F6',
+              fillOpacity: 0.15,
+            }).addTo(mapObj);
+
+            mapObj.flyTo([lat, lng], 16, { duration: 0.8 });
+            markerObj.setLatLng([lat, lng]);
+          }
+
+          handlePositionUpdate(lat, lng);
+          const nearest = findNearestDistrict(lat, lng);
+          setGpsStatusInfo({
+            type: 'success',
+            text: `🎯 ล็อกพิกัดดาวเทียม GPS อัตโนมัติสำเร็จ: อ.${nearest.name_th} (ความแม่นยำ ±${accuracy} ม.)`,
+          });
+        } else {
+          setGpsStatusInfo({
+            type: 'warning',
+            text: `⚠️ พิกัดดาวเทียมอยู่นอกพื้นที่ จ.ศรีสะเกษ (เปิดโหมดปักหมุดเอง) — สามารถพิมพ์ค้นหา หรือเลือก 22 อำเภอเพื่อปักหมุดได้ทันที`,
+          });
+        }
+      };
+
+      try {
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (pos) => {
+            count++;
+            const acc = pos.coords.accuracy;
+            if (acc < bestAcc) {
+              bestAcc = acc;
+              bestPosition = pos;
+            }
+
+            if (acc <= 25 || count >= 3) {
+              clearTimeout(autoTimeout);
+              if (watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+                watchIdRef.current = null;
+              }
+              setIsLocating(false);
+              applyLocation(pos);
+            }
+          },
+          () => {
+            clearTimeout(autoTimeout);
+            setIsLocating(false);
+            setGpsStatusInfo({
+              type: 'warning',
+              text: '⚠️ ไม่สามารถเข้าถึง GPS ได้ (เปิดโหมดปักหมุดเอง) — สามารถแตะลากหมุดบนแผนที่ หรือพิมพ์ค้นหาชื่อสถานที่ได้เลยครับ',
+            });
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+      } catch (e) {
+        clearTimeout(autoTimeout);
+        setIsLocating(false);
+      }
+    };
 
     initLeaflet();
 

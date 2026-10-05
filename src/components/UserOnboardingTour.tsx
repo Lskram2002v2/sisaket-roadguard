@@ -51,10 +51,10 @@ const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'tour-location-section',
     targetTab: 'report',
-    title: 'ระบบปักหมุด GIS 22 อำเภอ',
-    description: 'ระบบตรวจจับพิกัด GPS อัตโนมัติและจำกัดขอบเขตเฉพาะ 22 อำเภอในจังหวัดศรีสะเกษ พร้อมส่งเรื่องตรงถึงแขวงทางหลวงและ อบจ.',
+    title: 'ระบบพิกัดดาวเทียม GPS & ปักหมุดอิสระ',
+    description: 'ระบบบังคับเปิด GPS เพื่อล็อกพิกัดอัตโนมัติด้วยความแม่นยำสูงระดับดาวเทียม (5-10 เมตร) เพื่อให้เจ้าหน้าที่ลงพื้นที่ได้ตรงจุดที่สุด และหากไม่มีสัญญาณสามารถปักหมุดเอง หรือค้นหาชื่อถนน/สถานที่ได้ทันที',
     badge: 'ขั้นตอนที่ 3 / 5',
-    tip: '📍 สามารถลากหมุดบนแผนที่เพื่อระบุตำแหน่งที่แน่นอนได้',
+    tip: '📍 บังคับเปิด GPS เพื่อความแม่นยำสูงสุด หรือลากหมุดสีทองปักจุดเองได้อิสระ',
     position: 'top',
   },
   {
@@ -268,11 +268,11 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
             <div className="space-y-2.5">
               <div className="flex items-start gap-3 rounded-2xl bg-amber-50/80 p-3 border border-amber-200/70">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white shadow-sm">
-                  <Camera className="h-4 w-4" />
+                  <MapPin className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-stone-900">1. ถ่ายรูป & AI ตรวจจับพิกัด</h4>
-                  <p className="text-[11px] text-stone-600">แนบภาพระยะใกล้-ไกล ระบุพิกัด GPS อัตโนมัติใน 22 อำเภอ</p>
+                  <h4 className="text-xs font-bold text-stone-900">1. ล็อกพิกัดดาวเทียม GPS ความแม่นยำสูง</h4>
+                  <p className="text-[11px] text-stone-600">บังคับเปิด GPS เพื่อล็อกตำแหน่งหลุมแม่นยำ 5-10 ม. (หรือปักหมุดเองได้กรณีไม่มีสัญญาณ)</p>
                 </div>
               </div>
 
