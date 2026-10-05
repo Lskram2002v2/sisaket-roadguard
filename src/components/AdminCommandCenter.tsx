@@ -30,15 +30,27 @@ import {
   Trash2,
   Edit3,
   Save,
+  Bell,
+  Volume2,
+  VolumeX,
+  Radio,
+  X,
 } from 'lucide-react';
 import { RoadReport, ReportStatus, SeverityLevel } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { SISAKET_DISTRICTS, SISAKET_CENTER } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
-import { playAlertChime } from '@/lib/audio-synth';
+import { audioNotification, playAlertChime } from '@/lib/audio-synth';
 
 type FilterType = 'ALL' | 'URGENT' | 'TODAY' | 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
+
+interface AdminNotificationItem {
+  id: string;
+  report: RoadReport;
+  read: boolean;
+  timeStr: string;
+}
 
 export default function AdminCommandCenter() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -55,6 +67,15 @@ export default function AdminCommandCenter() {
   const [zoomPhoto, setZoomPhoto] = useState<string | null>(null);
   const [showDbModal, setShowDbModal] = useState(false);
 
+  // Real-time Notification & Audio States
+  const [isMuted, setIsMuted] = useState(false);
+  const [notifications, setNotifications] = useState<AdminNotificationItem[]>([]);
+  const [isBellOpen, setIsBellOpen] = useState(false);
+  const [incomingToast, setIncomingToast] = useState<RoadReport | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const knownReportIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef<boolean>(true);
+
   // Edit / Delete Case States
   const [editingReport, setEditingReport] = useState<RoadReport | null>(null);
   const [editDistrict, setEditDistrict] = useState('');
@@ -70,12 +91,53 @@ export default function AdminCommandCenter() {
   const activeDistrictLayerRef = useRef<any>(null);
 
   useEffect(() => {
-    loadData();
-    const unsub = roadStore.subscribe(() => {
-      loadData();
-      playAlertChime('new_report');
+    setIsMuted(audioNotification.getMuted());
+
+    const initFetch = async () => {
+      const data = await roadStore.getAllReports();
+      setReports(data);
+      knownReportIdsRef.current = new Set(data.map((r) => r.id));
+      isInitialLoadRef.current = false;
+    };
+    initFetch();
+
+    const unsub = roadStore.subscribe(async () => {
+      const freshData = await roadStore.getAllReports();
+      setReports(freshData);
+
+      if (!isInitialLoadRef.current) {
+        const newItems = freshData.filter((r) => !knownReportIdsRef.current.has(r.id));
+        if (newItems.length > 0) {
+          // Play chime ONLY when a genuine new request is received
+          audioNotification.playNewRequestChime();
+
+          const latest = newItems[0];
+          setIncomingToast(latest);
+
+          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+          toastTimeoutRef.current = setTimeout(() => {
+            setIncomingToast(null);
+          }, 8000);
+
+          // Add to notifications list
+          const newNotifs: AdminNotificationItem[] = newItems.map((item) => ({
+            id: `${item.id}-${Date.now()}`,
+            report: item,
+            read: false,
+            timeStr: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          }));
+          setNotifications((prev) => [...newNotifs, ...prev].slice(0, 30));
+
+          // Update known IDs
+          newItems.forEach((item) => knownReportIdsRef.current.add(item.id));
+        }
+      }
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
   }, []);
 
   const loadData = async () => {
@@ -405,8 +467,77 @@ export default function AdminCommandCenter() {
     );
   }
 
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const handleSelectNotification = (item: AdminNotificationItem) => {
+    // Mark as read
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
+    );
+    setActiveReport(item.report);
+    setSelectedDistrict('ALL');
+    setActiveFilter('ALL');
+    setIsBellOpen(false);
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
   return (
     <div className="w-full space-y-4 py-2">
+      {/* Floating Real-time Status Toast in Top-Right Corner */}
+      {incomingToast && (
+        <div className="fixed top-4 right-4 z-[9999] w-[92%] max-w-sm rounded-3xl bg-stone-900 text-white p-4 shadow-2xl border-2 border-amber-400 backdrop-blur-md animate-slideInRight">
+          <div className="flex items-start gap-3">
+            {/* Pulsing Icon */}
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-400/40">
+              <Radio className="h-6 w-6 animate-pulse text-amber-400" />
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm">
+                !
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  <span>มีเรื่องแจ้งใหม่!</span>
+                </span>
+                <span className="text-[10px] text-stone-400">เมื่อสักครู่</span>
+              </div>
+
+              <h4 className="text-xs font-black text-white truncate mt-0.5">
+                {incomingToast.tracking_code} • {incomingToast.district}
+              </h4>
+              <p className="text-[11px] text-stone-300 truncate mt-0.5">
+                {incomingToast.landmark_description}
+              </p>
+
+              <div className="mt-2.5 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setActiveReport(incomingToast);
+                    setSelectedDistrict('ALL');
+                    setActiveFilter('ALL');
+                    setIncomingToast(null);
+                  }}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 py-1.5 text-center text-xs font-bold text-stone-950 hover:from-amber-400 hover:to-amber-300 transition-all shadow-md active:scale-95"
+                >
+                  ดูรายละเอียดเคสนี้
+                </button>
+                <button
+                  onClick={() => setIncomingToast(null)}
+                  className="rounded-xl bg-white/10 px-2.5 py-1.5 text-xs text-stone-300 hover:bg-white/20 transition-all"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Lightbox Photo Preview Modal */}
       {zoomPhoto && (
         <div
@@ -446,6 +577,120 @@ export default function AdminCommandCenter() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Audio Sound Toggle */}
+          <button
+            onClick={() => {
+              const newMuted = audioNotification.toggleMute();
+              setIsMuted(newMuted);
+              if (!newMuted) {
+                audioNotification.playNewRequestChime();
+              }
+            }}
+            className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold border transition-all ${
+              isMuted
+                ? 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
+                : 'bg-amber-500/20 text-amber-300 border-amber-400/40 hover:bg-amber-500/30'
+            }`}
+            title={isMuted ? 'คลิกเพื่อเปิดเสียงแจ้งเตือน' : 'คลิกเพื่อปิดเสียงแจ้งเตือน'}
+          >
+            {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{isMuted ? 'ปิดเสียง' : 'เปิดเสียง'}</span>
+          </button>
+
+          {/* Notification Bell Center */}
+          <div className="relative">
+            <button
+              onClick={() => setIsBellOpen(!isBellOpen)}
+              className="relative flex items-center justify-center rounded-xl bg-white/10 p-2 text-stone-200 hover:bg-white/20 transition-all border border-white/10"
+              title="การแจ้งเตือนคำขอสดล่าสุด"
+            >
+              <Bell className="h-4 w-4 text-amber-400" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md animate-bounce">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Bell Dropdown Drawer */}
+            {isBellOpen && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-3xl bg-stone-900 text-white p-4 shadow-2xl border border-stone-700 z-50 space-y-3 animate-scaleUp"
+              >
+                <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <Bell className="h-4 w-4 text-amber-400" />
+                    <h4 className="text-xs font-bold text-white">การแจ้งเตือนคำขอสดล่าสุด</h4>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300 border border-rose-500/30">
+                        {unreadCount} ใหม่
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => audioNotification.playNewRequestChime()}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold"
+                      title="กดเพื่อทดสอบเสียงระฆัง"
+                    >
+                      🎵 ทดสอบเสียง
+                    </button>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[10px] text-stone-400 hover:text-stone-200"
+                      >
+                        อ่านทั้งหมด
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notifications List */}
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-1 text-xs">
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-stone-500 text-xs">
+                      <Bell className="h-6 w-6 mx-auto mb-1 opacity-30" />
+                      <span>ยังไม่มีคำขอใหม่ในรอบนี้</span>
+                    </div>
+                  ) : (
+                    notifications.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSelectNotification(item)}
+                        className={`w-full flex items-start gap-2.5 p-2.5 rounded-2xl border transition-all text-left ${
+                          item.read
+                            ? 'bg-stone-800/50 border-stone-800 text-stone-400'
+                            : 'bg-amber-500/10 border-amber-500/30 text-white shadow-sm'
+                        }`}
+                      >
+                        <div
+                          className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+                            item.read ? 'bg-stone-600' : 'bg-amber-400 animate-pulse'
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white text-xs truncate">
+                              {item.report.tracking_code}
+                            </span>
+                            <span className="text-[10px] text-stone-400 shrink-0">
+                              {item.timeStr}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-stone-300 truncate mt-0.5">
+                            {item.report.district} • {item.report.landmark_description}
+                          </p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Database Connection Pill */}
           <button
             onClick={() => setShowDbModal(true)}

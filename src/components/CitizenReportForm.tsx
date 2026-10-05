@@ -180,7 +180,7 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
       {/* Main Report Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Step 1: Map Picker */}
-        <div className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90">
+        <div id="tour-location-section" className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white shadow-sm">
               1
@@ -201,7 +201,7 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
         </div>
 
         {/* Step 2: 2 Photos */}
-        <div className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90">
+        <div id="tour-photo-section" className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90">
           <div className="flex items-center gap-2 mb-3">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white shadow-sm">
               2

@@ -6,6 +6,7 @@ import SisaketHeader from '@/components/SisaketHeader';
 import CitizenReportForm from '@/components/CitizenReportForm';
 import CitizenTrackingPortal from '@/components/CitizenTrackingPortal';
 import PublicMapFeed from '@/components/PublicMapFeed';
+import UserOnboardingTour from '@/components/UserOnboardingTour';
 
 type MainTab = 'report' | 'track' | 'feed';
 
@@ -21,13 +22,19 @@ export default function HomePage() {
   return (
     <main className="flex flex-col min-h-screen pb-20">
       {/* Aesthetic Cultural Header with Sisaket Landmarks */}
-      <SisaketHeader />
+      <SisaketHeader onStartTour={() => {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('sisaket_onboarding_welcomed');
+          window.location.reload();
+        }
+      }} />
 
       {/* Main Container */}
       <div className="px-3 pt-4 pb-6 space-y-4 flex-1">
-        {/* Modern Minimal Tab Switcher */}
-        <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-stone-200/70 p-1 text-xs font-semibold shadow-inner border border-stone-300/60">
+        {/* Modern Minimal Tab Switcher with Tour ID */}
+        <div id="tour-tab-switcher" className="grid grid-cols-3 gap-1.5 rounded-2xl bg-stone-200/70 p-1 text-xs font-semibold shadow-inner border border-stone-300/60">
           <button
+            id="tour-tab-report-btn"
             onClick={() => setActiveTab('report')}
             className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
               activeTab === 'report'
@@ -40,6 +47,7 @@ export default function HomePage() {
           </button>
 
           <button
+            id="tour-tab-track-btn"
             onClick={() => setActiveTab('track')}
             className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
               activeTab === 'track'
@@ -52,6 +60,7 @@ export default function HomePage() {
           </button>
 
           <button
+            id="tour-tab-feed-btn"
             onClick={() => setActiveTab('feed')}
             className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
               activeTab === 'feed'
@@ -79,6 +88,12 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Interactive User Onboarding, Spotlight Guided Tour & Checklist */}
+      <UserOnboardingTour
+        activeTab={activeTab}
+        onSwitchTab={(tab) => setActiveTab(tab)}
+      />
 
       {/* Footer Branding */}
       <footer className="mt-auto border-t border-stone-200/80 py-4 text-center text-xs text-stone-500 bg-stone-50/50">

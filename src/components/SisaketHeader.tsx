@@ -34,7 +34,11 @@ const SISAKET_LANDMARKS = [
   },
 ];
 
-export default function SisaketHeader() {
+interface SisaketHeaderProps {
+  onStartTour?: () => void;
+}
+
+export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [reports, setReports] = useState<RoadReport[]>([]);
 
@@ -102,13 +106,26 @@ export default function SisaketHeader() {
             </div>
           </div>
 
-          <Link
-            href="/admin"
-            className="flex items-center gap-1 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-stone-200 backdrop-blur-md hover:bg-white/20 transition-all border border-white/10"
-          >
-            <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-            <span>เจ้าหน้าที่</span>
-          </Link>
+          <div className="flex items-center gap-1.5">
+            {onStartTour && (
+              <button
+                onClick={onStartTour}
+                className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-2.5 py-1.5 text-xs font-semibold text-amber-300 backdrop-blur-md hover:bg-amber-500/30 transition-all border border-amber-400/30"
+                title="เปิดแนะนำการใช้งานระบบ"
+              >
+                <Compass className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden sm:inline">วิธีใช้งาน</span>
+              </button>
+            )}
+
+            <Link
+              href="/admin"
+              className="flex items-center gap-1 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-stone-200 backdrop-blur-md hover:bg-white/20 transition-all border border-white/10"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
+              <span>เจ้าหน้าที่</span>
+            </Link>
+          </div>
         </div>
 
         {/* Tourist Landmark Tag & Slide Indicator */}
