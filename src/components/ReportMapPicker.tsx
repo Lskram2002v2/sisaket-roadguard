@@ -15,8 +15,6 @@ import {
   RefreshCw,
   Compass,
   Lock,
-  ChevronRight,
-  HelpCircle,
 } from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
@@ -72,8 +70,6 @@ export default function ReportMapPicker({
   const [showMandatoryModal, setShowMandatoryModal] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
-  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null);
 
   // Duplicate check
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
@@ -95,7 +91,6 @@ export default function ReportMapPicker({
 
   // Trigger Mandatory GPS Modal on first visit to enforce location permission
   useEffect(() => {
-    // Show mandatory GPS activation modal if location hasn't been locked yet
     const timer = setTimeout(() => {
       if (!hasGpsLocked) {
         setShowMandatoryModal(true);
@@ -322,10 +317,6 @@ export default function ReportMapPicker({
     setIsLocating(true);
     setPermissionDenied(false);
     setGeoError(null);
-    setGpsStatusInfo({
-      type: 'info',
-      text: '🛰️ กำลังรับสัญญาณดาวเทียม GPS จากมือถือแบบเรียลไทม์...',
-    });
 
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -340,7 +331,6 @@ export default function ReportMapPicker({
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 10);
-      setGpsAccuracyMeters(accuracy);
       setHasGpsLocked(true);
       setShowMandatoryModal(false);
 
@@ -363,20 +353,7 @@ export default function ReportMapPicker({
       }
 
       handlePositionUpdate(lat, lng);
-      const nearest = findNearestDistrict(lat, lng);
-
-      if (isWithinSisaket(lat, lng)) {
-        setGpsStatusInfo({
-          type: 'success',
-          text: `🎯 ล็อกพิกัดปัจจุบันสำเร็จ: อ.${nearest.name_th} (${lat.toFixed(5)}, ${lng.toFixed(5)} / แม่นยำ ±${accuracy}ม.)`,
-        });
-        playAlertChime('success');
-      } else {
-        setGpsStatusInfo({
-          type: 'warning',
-          text: `📶 พิกัด GPS อยู่นอกเขตศรีสะเกษ — สามารถปักหมุดเองได้ครับ`,
-        });
-      }
+      playAlertChime('success');
     };
 
     const autoTimeout = setTimeout(() => {
@@ -388,10 +365,6 @@ export default function ReportMapPicker({
       if (bestPos) {
         applyLocation(bestPos);
       } else {
-        setGpsStatusInfo({
-          type: 'warning',
-          text: '💡 ท่าที่ 2: ท่านสามารถแตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่/ถนนได้ทันที',
-        });
         setShowMandatoryModal(false);
       }
     }, 6000);
@@ -405,11 +378,6 @@ export default function ReportMapPicker({
             bestAcc = acc;
             bestPos = pos;
           }
-
-          setGpsStatusInfo({
-            type: 'info',
-            text: `🛰️ กำลังรับสัญญาณดาวเทียม (ความแม่นยำ: ±${Math.round(acc)} ม.)...`,
-          });
 
           // เมื่อความแม่นยำดีขึ้นเรื่อยๆ (< 25 เมตร หรือตัวอย่างเกิน 3 รอบ) ให้ล็อกทันที
           if (acc <= 25 || samples >= 3) {
@@ -429,7 +397,7 @@ export default function ReportMapPicker({
             setPermissionDenied(true);
             setGeoError('คุณได้ปฏิเสธการเข้าถึงตำแหน่ง กรุณาเปิดสิทธิ์ Location ในการตั้งค่าเบราว์เซอร์');
           } else {
-            setGeoError('ไม่สามารถดึงสัญญาณ GPS ได้ในขณะนี้ — เข้าสู่โหมดปักหมุดเอง');
+            setGeoError('ไม่สามารถดึงสัญญาณ GPS ได้ในขณะนี้ — สามารถลากหมุดปักเองได้ครับ');
             setShowMandatoryModal(false);
           }
         },
@@ -483,10 +451,6 @@ export default function ReportMapPicker({
     }
 
     handlePositionUpdate(item.lat, item.lng);
-    setGpsStatusInfo({
-      type: 'info',
-      text: `📍 ปักหมุดที่: ${item.name} (อ.${item.district})`,
-    });
   };
 
   const handleDistrictJump = (targetDistrictName: string) => {
@@ -504,7 +468,7 @@ export default function ReportMapPicker({
   const isOutside = !isWithinSisaket(latitude, longitude);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2">
       {/* 🌟 Mandatory GPS Activation Modal (บังคับเปิด GPS เพื่อความแม่นยำสูงสุด) */}
       {showMandatoryModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fadeIn">
@@ -671,23 +635,7 @@ export default function ReportMapPicker({
         )}
       </div>
 
-      {/* 3. Live GPS Status / Feedback Alert Banner */}
-      {gpsStatusInfo && (
-        <div
-          className={`flex items-start gap-2 rounded-xl p-2 text-xs animate-fadeIn shadow-xs border ${
-            gpsStatusInfo.type === 'success'
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-              : gpsStatusInfo.type === 'warning'
-              ? 'bg-amber-50 border-amber-300 text-amber-900'
-              : 'bg-blue-50 border-blue-300 text-blue-900'
-          }`}
-        >
-          <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-          <span className="font-medium leading-relaxed">{gpsStatusInfo.text}</span>
-        </div>
-      )}
-
-      {/* Geo Error / GPS Blocked Guide */}
+      {/* Geo Error / GPS Blocked Guide (Only shown when error happens) */}
       {geoError && (
         <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 p-2 text-xs text-rose-800 shadow-xs animate-fadeIn">
           <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
@@ -695,7 +643,7 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {/* Proximity Warning */}
+      {/* Proximity Warning (Duplicate check) */}
       {nearbyWarning && (
         <div className="flex items-center gap-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 p-2 text-xs text-amber-950 animate-fadeIn">
           <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" />
@@ -703,14 +651,14 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {isOutside && !gpsStatusInfo && (
+      {isOutside && (
         <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 px-2.5 py-1 text-[11px] text-rose-900">
           <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0" />
           <span>พิกัดอยู่นอกเขต 22 อำเภอ จ.ศรีสะเกษ</span>
         </div>
       )}
 
-      {/* 4. Interactive Leaflet Map Container */}
+      {/* 3. Interactive Leaflet Map Container (Clean and Simple) */}
       <div className="relative overflow-hidden rounded-2xl border-2 border-purple-200/80 shadow-md bg-stone-100 h-64 sm:h-72 w-full">
         <div ref={mapContainerRef} className="h-full w-full z-0" />
 
@@ -734,30 +682,6 @@ export default function ReportMapPicker({
         {/* Floating Pin Helper Badge */}
         <div className="absolute bottom-2 left-2 z-10 rounded-md bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-stone-700 shadow-xs border border-stone-200/80 backdrop-blur-xs">
           💡 ท่าที่ 2: แตะแผนที่หรือลากหมุดสีทองเพื่อปรับจุดชำรุด
-        </div>
-      </div>
-
-      {/* 5. Streamlined Coordinates & District Live Status Capsule */}
-      <div className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-purple-50/80 to-amber-50/80 px-3 py-2 text-xs border border-purple-200/80 shadow-xs">
-        <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
-          <Layers className="h-3.5 w-3.5 text-purple-700 shrink-0" />
-          <span className="text-purple-900 font-bold truncate">อ.{district || 'เมืองศรีสะเกษ'}</span>
-          <span className="text-stone-300">•</span>
-          <span className="font-mono text-stone-700 font-semibold truncate">
-            {latitude.toFixed(5)}, {longitude.toFixed(5)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
-          {gpsAccuracyMeters && (
-            <span className="text-blue-800 bg-blue-100 font-bold px-2 py-0.5 rounded-full border border-blue-200">
-              ±{gpsAccuracyMeters}ม.
-            </span>
-          )}
-          <span className="text-emerald-800 bg-emerald-100 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
-            <CheckCircle2 className="h-3 w-3 text-emerald-700" />
-            <span>พร้อมส่งพิกัด</span>
-          </span>
         </div>
       </div>
     </div>

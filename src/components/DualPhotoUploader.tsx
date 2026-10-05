@@ -44,7 +44,7 @@ export default function DualPhotoUploader({
       setCompressingBox(type);
       setErrorMsg(null);
 
-      // 1. ดึงพิกัด GPS จาก EXIF Metadata ของรูปถ่าย (ถ้ากล้องมือถือเปิดบันทึกพิกัดไว้)
+      // ดึงพิกัด GPS จาก EXIF Metadata ของรูปถ่าย (ถ้ากล้องบันทึกไว้)
       extractGpsFromImage(file).then((gps) => {
         if (gps) {
           setPhotoGpsInfo({ lat: gps.latitude, lng: gps.longitude });
@@ -52,16 +52,16 @@ export default function DualPhotoUploader({
         }
       }).catch(() => {});
 
-      // 2. บีบอัดรูปภาพเป็น WebP
+      // บีบอัดรูปภาพเป็น WebP คุณภาพสูง
       const result = await compressImageToWebP(file, 1200, 1200, 0.75);
 
       if (type === 'context' && closeupHash && result.hash === closeupHash) {
-        setErrorMsg('กรุณาอย่าใช้รูปเดียวกันทั้ง 2 กล่อง (ต้องมีทั้งภาพมุมกว้างและภาพระยะใกล้)');
+        setErrorMsg('กรุณาอย่าใช้รูปเดียวกันทั้ง 2 ช่อง (ต้องมีภาพมุมกว้างและภาพระยะใกล้)');
         setCompressingBox(null);
         return;
       }
       if (type === 'closeup' && contextHash && result.hash === contextHash) {
-        setErrorMsg('กรุณาอย่าใช้รูปเดียวกันทั้ง 2 กล่อง (ต้องมีทั้งภาพมุมกว้างและภาพระยะใกล้)');
+        setErrorMsg('กรุณาอย่าใช้รูปเดียวกันทั้ง 2 ช่อง (ต้องมีภาพมุมกว้างและภาพระยะใกล้)');
         setCompressingBox(null);
         return;
       }
@@ -81,7 +81,7 @@ export default function DualPhotoUploader({
   };
 
   /**
-   * หมุนรูปภาพ 90 องศาตามเข็มนาฬิกาผ่าน Canvas (แก้ปัญหา EXIF orientation บนมือถือ)
+   * หมุนรูปภาพ 90 องศาตามเข็มนาฬิกา
    */
   const handleRotateImage = (type: 'context' | 'closeup') => {
     const targetUrl = type === 'context' ? contextPhotoUrl : closeupPhotoUrl;
@@ -124,15 +124,7 @@ export default function DualPhotoUploader({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-stone-800">
-          <Camera className="h-4 w-4 text-amber-600" />
-          <span>แนบรูปถ่าย 2 รูป <span className="text-amber-700 text-xs font-normal">(บังคับ)</span></span>
-        </div>
-        <span className="text-[11px] text-amber-800 font-medium">📸 ถ่ายสด หรือ 🖼️ เลือกรูปในเครื่อง</span>
-      </div>
-
+    <div className="space-y-2.5">
       {errorMsg && (
         <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700">
           <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
@@ -140,21 +132,10 @@ export default function DualPhotoUploader({
         </div>
       )}
 
-      {photoGpsInfo && (
-        <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-300 p-2.5 text-xs text-emerald-900 animate-fadeIn">
-          <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-          <div className="min-w-0">
-            <span className="font-bold">ตรวจพบพิกัดจากภาพถ่าย: </span>
-            <span className="font-mono text-[11px]">{photoGpsInfo.lat.toFixed(4)}, {photoGpsInfo.lng.toFixed(4)}</span>
-            <span className="text-emerald-700 text-[10px] ml-1">(ย้ายหมุดบนแผนที่อัตโนมัติ)</span>
-          </div>
-        </div>
-      )}
-
-      {/* 2 Photo Upload Boxes */}
+      {/* 2 Photo Upload Boxes (Clean & Minimal) */}
       <div className="grid grid-cols-2 gap-3">
         {/* Box 1: Wide Context Photo */}
-        <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50/60 p-3 text-center transition-all hover:border-amber-400 hover:bg-amber-50/30 overflow-hidden min-h-[165px]">
+        <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50/60 p-3 text-center transition-all hover:border-amber-400 hover:bg-amber-50/30 overflow-hidden min-h-[155px]">
           {contextPhotoUrl ? (
             <div className="relative h-full w-full">
               <img
@@ -196,9 +177,8 @@ export default function DualPhotoUploader({
               </div>
               <span className="text-xs font-semibold text-stone-800">1. ภาพมุมกว้าง</span>
               <span className="text-[10px] text-stone-500 mt-0.5 leading-tight px-1">
-                เห็นถนน / เสาไฟ / ป้ายทาง
+                เห็นถนน / เสาไฟ / ทางแยก
               </span>
-              <span className="text-[9px] text-amber-700 font-medium mt-1">แตะเพื่อถ่ายรูปหรือเลือกไฟล์</span>
               <input
                 ref={contextInputRef}
                 type="file"
@@ -211,7 +191,7 @@ export default function DualPhotoUploader({
         </div>
 
         {/* Box 2: Close-up Damage Photo */}
-        <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50/60 p-3 text-center transition-all hover:border-amber-400 hover:bg-amber-50/30 overflow-hidden min-h-[165px]">
+        <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50/60 p-3 text-center transition-all hover:border-amber-400 hover:bg-amber-50/30 overflow-hidden min-h-[155px]">
           {closeupPhotoUrl ? (
             <div className="relative h-full w-full">
               <img
@@ -255,7 +235,6 @@ export default function DualPhotoUploader({
               <span className="text-[10px] text-stone-500 mt-0.5 leading-tight px-1">
                 เห็นตัวหลุม / ความลึกชัดเจน
               </span>
-              <span className="text-[9px] text-amber-700 font-medium mt-1">แตะเพื่อถ่ายรูปหรือเลือกไฟล์</span>
               <input
                 ref={closeupInputRef}
                 type="file"
