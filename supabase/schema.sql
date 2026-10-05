@@ -159,7 +159,10 @@ EXECUTE FUNCTION public.handle_road_report_before_write();
 
 -- ฟังก์ชันบันทึก Timeline อัตโนมัติเมื่อสถานะเปลี่ยน
 CREATE OR REPLACE FUNCTION public.handle_report_status_audit()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
     IF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
         INSERT INTO public.report_timeline (report_id, previous_status, new_status, actor_name, notes)
@@ -209,6 +212,11 @@ CREATE POLICY "Allow public read timeline"
 ON public.report_timeline FOR SELECT 
 TO anon, authenticated 
 USING (true);
+
+CREATE POLICY "Allow insert timeline" 
+ON public.report_timeline FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
 
 -- ------------------------------------------------------------------------------
 -- 10. เปิดใช้งาน Realtime Publication

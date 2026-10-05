@@ -188,7 +188,17 @@ class RoadReportStore {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('road_reports').insert([report]);
+        const { id, ...supabasePayload } = report;
+        const { data, error } = await supabase
+          .from('road_reports')
+          .insert([supabasePayload])
+          .select();
+        if (!error && data && data[0]) {
+          report.id = data[0].id;
+          this.save();
+        } else if (error) {
+          console.warn('Supabase insert error:', error.message);
+        }
       } catch (err) {
         console.warn('Supabase insert failed:', err);
       }
@@ -231,7 +241,7 @@ class RoadReportStore {
             resolved_at: target.resolved_at,
             updated_at: target.updated_at,
           })
-          .eq('id', target.id);
+          .eq('tracking_code', target.tracking_code);
       } catch (err) {
         console.warn('Supabase update failed:', err);
       }
@@ -255,7 +265,7 @@ class RoadReportStore {
         await supabase
           .from('road_reports')
           .update({ upvote_count: target.upvote_count })
-          .eq('id', target.id);
+          .eq('tracking_code', target.tracking_code);
       } catch (err) {
         console.warn('Supabase upvote update failed:', err);
       }
