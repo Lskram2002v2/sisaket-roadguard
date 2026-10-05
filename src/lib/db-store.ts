@@ -10,32 +10,42 @@ const THEME_STORAGE_KEY = 'sisaket_roadguard_theme_v1';
 const INITIAL_BANNERS: SponsorBanner[] = [
   {
     id: 'ban-001',
-    title: 'โครงการ Sisaket Smart City ร่วมใจถนนสวย ไร้หลุม',
-    subtitle: 'ขับเคลื่อนโดย แขวงทางหลวงศรีสะเกษ และ องค์กรปกครองส่วนท้องถิ่น 22 อำเภอ',
-    image_url: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1200&auto=format&fit=crop&q=80',
-    target_link: 'https://sisaket.go.th',
+    title: 'ป้ายประชาสัมพันธ์ 1',
+    image_url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzGImso0DdeSKyj6m1vEw530UiyFqv19PYnR1cE5cFd3iR1-h8LN-2l94&s=10',
     is_active: true,
     order: 1,
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
   },
   {
     id: 'ban-002',
-    title: 'ส่งเสริมการท่องเที่ยวศรีสะเกษ ดินแดนปราสาทขอม & ผามออีแดง',
-    subtitle: 'ขับขี่ปลอดภัย สัญจรสะดวก เชื่อมโยงทุกเส้นทางสู่แลนด์มาร์กสำคัญ',
-    image_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80',
-    target_link: 'https://sisaket.go.th',
+    title: 'ป้ายประชาสัมพันธ์ 2',
+    image_url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRw4OqfAtI22mYtiFgx6rhY4cKmJv2hRMfHgAOztMDUKkDLlpXQgiSARRI&s=10',
     is_active: true,
     order: 2,
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
   },
   {
     id: 'ban-003',
-    title: 'สายด่วนแจ้งเหตุฉุกเฉินบนทางหลวง 1586 • กู้ภัย 1669 ตลอด 24 ชม.',
-    subtitle: 'ศูนย์รับแจ้งเหตุเร่งด่วน พร้อมทีมช่างเคลื่อนที่เร็วเข้าตรวจสอบจุดเสี่ยง',
-    image_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&auto=format&fit=crop&q=80',
-    target_link: 'tel:1586',
+    title: 'ป้ายประชาสัมพันธ์ 3',
+    image_url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJjNkj36ZbjkhaFwxxt4GFbcV5_jxJiF2CNkUGNMrNs9tE5uJzyngLI9U&s=10',
     is_active: true,
     order: 3,
+    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: 'ban-004',
+    title: 'ป้ายประชาสัมพันธ์ 4',
+    image_url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3Mf1-2DlE6Mkz833PdbTfXWYGNwv3PHfs0N6Iud_FXCL-2vUyuAmbRaA&s=10',
+    is_active: true,
+    order: 4,
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: 'ban-005',
+    title: 'ป้ายประชาสัมพันธ์ 5',
+    image_url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzGImso0DdeSKyj6m1vEw530UiyFqv19PYnR1cE5cFd3iR1-h8LN-2l94&s=10',
+    is_active: true,
+    order: 5,
     created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
   },
 ];
@@ -497,11 +507,38 @@ class RoadReportStore {
     return [...this.banners].sort((a, b) => a.order - b.order);
   }
 
-  public async getAllBanners(): Promise<SponsorBanner[]> {
+  public async getAllBanners(forceFresh = false): Promise<SponsorBanner[]> {
+    if (!forceFresh && this.banners.length > 0) {
+      this.refreshBannersFromSupabase().catch(() => {});
+      return this.getBannersInstant();
+    }
+
+    await this.refreshBannersFromSupabase();
+    return this.getBannersInstant();
+  }
+
+  public async refreshBannersFromSupabase(): Promise<SponsorBanner[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('sponsor_banners')
+          .select('*')
+          .order('order', { ascending: true });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          this.banners = data;
+          this.saveBanners();
+          return this.getBannersInstant();
+        }
+      } catch (err) {
+        console.warn('Supabase fetch banners failed, fallback to local store:', err);
+      }
+    }
     return this.getBannersInstant();
   }
 
   public async saveBanner(bannerData: Omit<SponsorBanner, 'id' | 'created_at'> & { id?: string }): Promise<SponsorBanner> {
+    let resultBanner: SponsorBanner;
+
     if (bannerData.id) {
       const idx = this.banners.findIndex((b) => b.id === bannerData.id);
       if (idx !== -1) {
@@ -510,25 +547,57 @@ class RoadReportStore {
           ...bannerData,
         };
         this.banners[idx] = updated;
-        this.saveBanners();
-        return updated;
+        resultBanner = updated;
+      } else {
+        resultBanner = {
+          id: bannerData.id,
+          title: bannerData.title || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
+          subtitle: bannerData.subtitle,
+          image_url: bannerData.image_url,
+          target_link: bannerData.target_link,
+          is_active: bannerData.is_active ?? true,
+          order: bannerData.order ?? (this.banners.length + 1),
+          created_at: new Date().toISOString(),
+        };
+        this.banners.push(resultBanner);
+      }
+    } else {
+      resultBanner = {
+        id: `ban-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        title: bannerData.title || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
+        subtitle: bannerData.subtitle,
+        image_url: bannerData.image_url,
+        target_link: bannerData.target_link,
+        is_active: bannerData.is_active ?? true,
+        order: bannerData.order ?? (this.banners.length + 1),
+        created_at: new Date().toISOString(),
+      };
+      this.banners.push(resultBanner);
+    }
+
+    this.saveBanners();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('sponsor_banners')
+          .upsert({
+            id: resultBanner.id,
+            title: resultBanner.title,
+            subtitle: resultBanner.subtitle || null,
+            image_url: resultBanner.image_url,
+            target_link: resultBanner.target_link || null,
+            is_active: resultBanner.is_active,
+            order: resultBanner.order,
+            created_at: resultBanner.created_at,
+            updated_at: new Date().toISOString(),
+          });
+      } catch (err) {
+        console.warn('Supabase upsert banner failed:', err);
       }
     }
 
-    const newBanner: SponsorBanner = {
-      id: `ban-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      title: bannerData.title || 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
-      subtitle: bannerData.subtitle,
-      image_url: bannerData.image_url,
-      target_link: bannerData.target_link,
-      is_active: bannerData.is_active ?? true,
-      order: bannerData.order ?? (this.banners.length + 1),
-      created_at: new Date().toISOString(),
-    };
-
-    this.banners.push(newBanner);
-    this.saveBanners();
-    return newBanner;
+    return resultBanner;
   }
 
   public async deleteBanner(id: string): Promise<boolean> {
@@ -537,6 +606,15 @@ class RoadReportStore {
 
     this.banners.splice(idx, 1);
     this.saveBanners();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('sponsor_banners').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Supabase delete banner failed:', err);
+      }
+    }
+
     return true;
   }
 
@@ -545,6 +623,18 @@ class RoadReportStore {
     if (!target) return false;
     target.is_active = !target.is_active;
     this.saveBanners();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('sponsor_banners')
+          .update({ is_active: target.is_active, updated_at: new Date().toISOString() })
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase toggle banner failed:', err);
+      }
+    }
+
     return target.is_active;
   }
 
@@ -554,6 +644,20 @@ class RoadReportStore {
       if (b) b.order = index + 1;
     });
     this.saveBanners();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        for (let i = 0; i < orderedIds.length; i++) {
+          await supabase
+            .from('sponsor_banners')
+            .update({ order: i + 1, updated_at: new Date().toISOString() })
+            .eq('id', orderedIds[i]);
+        }
+      } catch (err) {
+        console.warn('Supabase reorder banners failed:', err);
+      }
+    }
+
     return true;
   }
 
@@ -562,8 +666,34 @@ class RoadReportStore {
     return { ...this.theme };
   }
 
-  public async getThemeConfig(): Promise<HeaderThemeConfig> {
+  public async getThemeConfig(forceFresh = false): Promise<HeaderThemeConfig> {
+    if (!forceFresh && this.theme) {
+      this.refreshThemeFromSupabase().catch(() => {});
+      return this.getThemeConfigInstant();
+    }
+
+    await this.refreshThemeFromSupabase();
     return this.getThemeConfigInstant();
+  }
+
+  public async refreshThemeFromSupabase(): Promise<HeaderThemeConfig> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'header_theme')
+          .single();
+        if (!error && data?.value) {
+          this.theme = data.value as HeaderThemeConfig;
+          this.saveTheme();
+          return { ...this.theme };
+        }
+      } catch (err) {
+        console.warn('Supabase fetch theme failed, fallback to local store:', err);
+      }
+    }
+    return { ...this.theme };
   }
 
   public async updateThemeConfig(updates: Partial<HeaderThemeConfig>): Promise<HeaderThemeConfig> {
@@ -573,6 +703,21 @@ class RoadReportStore {
       updated_at: new Date().toISOString(),
     };
     this.saveTheme();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('system_settings')
+          .upsert({
+            key: 'header_theme',
+            value: this.theme,
+            updated_at: this.theme.updated_at,
+          });
+      } catch (err) {
+        console.warn('Supabase update theme failed:', err);
+      }
+    }
+
     return { ...this.theme };
   }
 }

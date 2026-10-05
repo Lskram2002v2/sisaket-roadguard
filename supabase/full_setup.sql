@@ -73,6 +73,24 @@ CREATE TABLE IF NOT EXISTS public.report_timeline (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.sponsor_banners (
+    id TEXT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL DEFAULT 'ป้ายประชาสัมพันธ์ / ผู้สนับสนุน',
+    subtitle VARCHAR(255),
+    image_url TEXT NOT NULL,
+    target_link TEXT,
+    is_active BOOLEAN DEFAULT true,
+    "order" INT DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 4. INDEXES
 CREATE INDEX IF NOT EXISTS idx_road_reports_tracking ON public.road_reports(tracking_code);
 CREATE INDEX IF NOT EXISTS idx_road_reports_district ON public.road_reports(district);
@@ -80,6 +98,8 @@ CREATE INDEX IF NOT EXISTS idx_road_reports_status ON public.road_reports(status
 CREATE INDEX IF NOT EXISTS idx_road_reports_severity ON public.road_reports(severity_level);
 CREATE INDEX IF NOT EXISTS idx_road_reports_created ON public.road_reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_road_reports_geom ON public.road_reports USING GIST(location_geom);
+CREATE INDEX IF NOT EXISTS idx_sponsor_banners_order ON public.sponsor_banners("order" ASC);
+CREATE INDEX IF NOT EXISTS idx_sponsor_banners_active ON public.sponsor_banners(is_active);
 
 -- 5. VIEWS (PDPA Compliant View)
 CREATE OR REPLACE VIEW public.public_road_reports AS 
@@ -209,6 +229,48 @@ ON public.report_timeline FOR DELETE
 TO anon, authenticated 
 USING (true);
 
+-- Banners & Settings Policies
+ALTER TABLE public.sponsor_banners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read banners" ON public.sponsor_banners;
+CREATE POLICY "Allow public read banners" 
+ON public.sponsor_banners FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert banners" ON public.sponsor_banners;
+CREATE POLICY "Allow public insert banners" 
+ON public.sponsor_banners FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update banners" ON public.sponsor_banners;
+CREATE POLICY "Allow public update banners" 
+ON public.sponsor_banners FOR UPDATE 
+TO anon, authenticated 
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public delete banners" ON public.sponsor_banners;
+CREATE POLICY "Allow public delete banners" 
+ON public.sponsor_banners FOR DELETE 
+TO anon, authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Allow public read settings" ON public.system_settings;
+CREATE POLICY "Allow public read settings" 
+ON public.system_settings FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Allow public modify settings" ON public.system_settings;
+CREATE POLICY "Allow public modify settings" 
+ON public.system_settings FOR ALL 
+TO anon, authenticated 
+USING (true)
+WITH CHECK (true);
+
 -- 8. STORAGE BUCKET & POLICIES
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
@@ -237,6 +299,7 @@ USING (bucket_id = 'road-reports');
 
 -- 9. REALTIME PUBLICATION
 ALTER PUBLICATION supabase_realtime ADD TABLE public.road_reports;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.sponsor_banners;
 
 -- 10. SEED DATA
 INSERT INTO public.districts (district_code, name_th, name_en, latitude, longitude) VALUES
@@ -370,3 +433,17 @@ INSERT INTO public.road_reports (
     NULL
 )
 ON CONFLICT (tracking_code) DO NOTHING;
+
+-- Seed Data: Sponsor & PR Banners (5 ลิงก์มาตรฐานของระบบ)
+INSERT INTO public.sponsor_banners (id, title, image_url, is_active, "order", created_at) VALUES
+('ban-001', 'ป้ายประชาสัมพันธ์ 1', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzGImso0DdeSKyj6m1vEw530UiyFqv19PYnR1cE5cFd3iR1-h8LN-2l94&s=10', true, 1, NOW() - INTERVAL '5 days'),
+('ban-002', 'ป้ายประชาสัมพันธ์ 2', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRw4OqfAtI22mYtiFgx6rhY4cKmJv2hRMfHgAOztMDUKkDLlpXQgiSARRI&s=10', true, 2, NOW() - INTERVAL '4 days'),
+('ban-003', 'ป้ายประชาสัมพันธ์ 3', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJjNkj36ZbjkhaFwxxt4GFbcV5_jxJiF2CNkUGNMrNs9tE5uJzyngLI9U&s=10', true, 3, NOW() - INTERVAL '3 days'),
+('ban-004', 'ป้ายประชาสัมพันธ์ 4', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3Mf1-2DlE6Mkz833PdbTfXWYGNwv3PHfs0N6Iud_FXCL-2vUyuAmbRaA&s=10', true, 4, NOW() - INTERVAL '2 days'),
+('ban-005', 'ป้ายประชาสัมพันธ์ 5', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzGImso0DdeSKyj6m1vEw530UiyFqv19PYnR1cE5cFd3iR1-h8LN-2l94&s=10', true, 5, NOW() - INTERVAL '1 day')
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed Data: System Settings (Header Theme Config)
+INSERT INTO public.system_settings (key, value, updated_at) VALUES
+('header_theme', '{"mode": "preset", "custom_images": [], "banner_speed_seconds": 5, "overlay_darkness": 75}'::jsonb, NOW())
+ON CONFLICT (key) DO NOTHING;
