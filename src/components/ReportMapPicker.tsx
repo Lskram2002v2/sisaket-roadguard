@@ -24,11 +24,13 @@ export default function ReportMapPicker({
 }: Props) {
   const [isLocating, setIsLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
   const [reports, setReports] = useState<RoadReport[]>([]);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const accuracyCircleRef = useRef<any>(null);
   const allDistrictsLayerRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
 
@@ -39,6 +41,20 @@ export default function ReportMapPicker({
     };
     loadReports();
   }, []);
+
+  // Sync Leaflet marker & map view when latitude/longitude props update from outside (e.g., photo GPS extraction)
+  useEffect(() => {
+    if (mapInstanceRef.current && markerRef.current) {
+      const currentPos = markerRef.current.getLatLng();
+      if (
+        Math.abs(currentPos.lat - latitude) > 0.0001 ||
+        Math.abs(currentPos.lng - longitude) > 0.0001
+      ) {
+        markerRef.current.setLatLng([latitude, longitude]);
+        mapInstanceRef.current.flyTo([latitude, longitude], 15, { duration: 0.6 });
+      }
+    }
+  }, [latitude, longitude]);
 
   // Check proximity whenever latitude/longitude or reports update
   useEffect(() => {
@@ -146,22 +162,47 @@ export default function ReportMapPicker({
         mapInstanceRef.current = map;
         markerRef.current = marker;
 
-        // ดึงพิกัด GPS อัตโนมัติทันทีที่เปิดหน้าเว็บ (Auto-Lock Position)
+        // ดึงพิกัด GPS อัตโนมัติทันทีที่เปิดหน้าเว็บแบบ High Accuracy (No Stale Cache)
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               const liveLat = pos.coords.latitude;
               const liveLng = pos.coords.longitude;
+              const accuracy = Math.round(pos.coords.accuracy || 10);
+
+              // วาดรัศมีความแม่นยำ GPS สีฟ้าแบบ Google Maps
+              if (accuracyCircleRef.current) {
+                map.removeLayer(accuracyCircleRef.current);
+              }
+              accuracyCircleRef.current = L.circle([liveLat, liveLng], {
+                radius: accuracy,
+                color: '#2563EB',
+                weight: 1.5,
+                fillColor: '#3B82F6',
+                fillOpacity: 0.15,
+              }).addTo(map);
+
               if (isWithinSisaket(liveLat, liveLng)) {
-                map.flyTo([liveLat, liveLng], 15, { duration: 1.0 });
+                map.flyTo([liveLat, liveLng], 16, { duration: 1.0 });
                 marker.setLatLng([liveLat, liveLng]);
                 handlePositionUpdate(liveLat, liveLng);
+                const nearest = findNearestDistrict(liveLat, liveLng);
+                setGpsStatusInfo({
+                  type: 'success',
+                  text: `🎯 ล็อกพิกัด GPS แม่นยำ: อ.${nearest.name_th} (ความคลาดเคลื่อน ±${accuracy} ม.)`,
+                });
+              } else {
+                const nearest = findNearestDistrict(liveLat, liveLng);
+                setGpsStatusInfo({
+                  type: 'warning',
+                  text: `📍 ตรวจพบพิกัดของคุณ (${liveLat.toFixed(4)}, ${liveLng.toFixed(4)}) อยู่นอกเขต จ.ศรีสะเกษ (ความแม่นยำ ±${accuracy}ม.) — ระบบตั้งหมุดเริ่มต้นไว้ที่ อ.${nearest.name_th} เพื่อความสะดวกในการทดสอบ`,
+                });
               }
             },
             () => {
-              // หากผู้ใช้บล็อกสิทธิ์ GPS ระบบจะให้ปักหมุดเองหรือเลือกอำเภอได้อย่างราบรื่น
+              // หากผู้ใช้ยังไม่ได้อนุญาต GPS ระบบจะให้ปักหมุดเองหรือเลือกอำเภอได้อย่างราบรื่น
             },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           );
         }
       }
@@ -225,40 +266,68 @@ export default function ReportMapPicker({
     if (!target) return;
 
     if (mapInstanceRef.current && markerRef.current) {
-      mapInstanceRef.current.flyTo([target.lat, target.lng], 13, { duration: 0.8 });
+      mapInstanceRef.current.flyTo([target.lat, target.lng], 14, { duration: 0.8 });
       markerRef.current.setLatLng([target.lat, target.lng]);
     }
 
     handlePositionUpdate(target.lat, target.lng);
   };
 
-  const handleGetLiveLocation = () => {
+  const handleGetLiveLocation = async () => {
     if (!navigator.geolocation) {
       setGeoError('อุปกรณ์ของคุณไม่รองรับการดึงพิกัด GPS');
       return;
     }
 
+    const L = await import('leaflet');
     setIsLocating(true);
     setGeoError(null);
+    setGpsStatusInfo(null);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocating(false);
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        const accuracy = Math.round(pos.coords.accuracy || 10);
 
         if (mapInstanceRef.current && markerRef.current) {
-          mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
+          // วาดรัศมีความแม่นยำ GPS สีฟ้า
+          if (accuracyCircleRef.current) {
+            mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+          }
+          accuracyCircleRef.current = L.circle([lat, lng], {
+            radius: accuracy,
+            color: '#2563EB',
+            weight: 1.5,
+            fillColor: '#3B82F6',
+            fillOpacity: 0.15,
+          }).addTo(mapInstanceRef.current);
+
+          mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
           markerRef.current.setLatLng([lat, lng]);
         }
 
         handlePositionUpdate(lat, lng);
+
+        const nearest = findNearestDistrict(lat, lng);
+        if (isWithinSisaket(lat, lng)) {
+          setGpsStatusInfo({
+            type: 'success',
+            text: `🎯 ตรวจพบตำแหน่ง GPS ของคุณ: อ.${nearest.name_th} (ความแม่นยำ ±${accuracy} ม.)`,
+          });
+        } else {
+          setGpsStatusInfo({
+            type: 'warning',
+            text: `📍 พิกัดของคุณ (${lat.toFixed(4)}, ${lng.toFixed(4)}) อยู่นอกเขต จ.ศรีสะเกษ (ความแม่นยำ ±${accuracy}ม.) แนะนำเลือก 22 อำเภอเพื่อทดสอบระบบ`,
+          });
+        }
       },
       (err) => {
         setIsLocating(false);
-        setGeoError('ไม่สามารถดึงตำแหน่งปัจจุบันได้ (สามารถเลือกอำเภอหรือเลื่อนหมุดบนแผนที่แทนได้ครับ)');
+        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาอนุญาตสิทธิ์ตำแหน่งในเบราว์เซอร์ หรือเลือกอำเภอในรายการด้านบนครับ');
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -302,6 +371,35 @@ export default function ReportMapPicker({
         </div>
       </div>
 
+      {/* GPS Status Banner */}
+      {gpsStatusInfo && (
+        <div
+          className={`flex items-start gap-2 rounded-2xl p-2.5 text-xs animate-fadeIn shadow-sm border ${
+            gpsStatusInfo.type === 'success'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              : gpsStatusInfo.type === 'warning'
+              ? 'bg-amber-50 border-amber-300 text-amber-900'
+              : 'bg-blue-50 border-blue-300 text-blue-900'
+          }`}
+        >
+          <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex-1">
+            <span className="font-medium leading-relaxed">{gpsStatusInfo.text}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Geo Error / GPS Blocked Guide */}
+      {geoError && (
+        <div className="flex items-start gap-2 rounded-2xl bg-rose-50 border border-rose-300 p-2.5 text-xs text-rose-800 shadow-sm animate-fadeIn">
+          <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold">แจ้งเตือนตำแหน่ง: </span>
+            <span>{geoError}</span>
+          </div>
+        </div>
+      )}
+
       {/* Proximity Alert Banner */}
       {nearbyWarning && (
         <div className="flex items-start gap-2 rounded-2xl bg-amber-500/15 border border-amber-500/40 p-3 text-xs text-amber-950 animate-fadeIn shadow-sm">
@@ -313,7 +411,7 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {isOutside && (
+      {isOutside && !gpsStatusInfo && (
         <div className="flex items-start gap-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 p-3 text-xs text-rose-900 shadow-sm">
           <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
           <div>

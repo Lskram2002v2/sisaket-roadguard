@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Camera, Image as ImageIcon, CheckCircle2, AlertCircle, X, Sparkles, RotateCw } from 'lucide-react';
-import { compressImageToWebP } from '@/lib/image-processor';
+import { Camera, Image as ImageIcon, CheckCircle2, AlertCircle, X, Sparkles, RotateCw, MapPin } from 'lucide-react';
+import { compressImageToWebP, extractGpsFromImage } from '@/lib/image-processor';
 
 interface Props {
   contextPhotoUrl: string;
   closeupPhotoUrl: string;
   trackingCode: string;
   onChange: (contextUrl: string, closeupUrl: string) => void;
+  onGpsDetected?: (lat: number, lng: number) => void;
 }
 
 export default function DualPhotoUploader({
@@ -16,11 +17,13 @@ export default function DualPhotoUploader({
   closeupPhotoUrl,
   trackingCode,
   onChange,
+  onGpsDetected,
 }: Props) {
   const [contextHash, setContextHash] = useState<string>('');
   const [closeupHash, setCloseupHash] = useState<string>('');
   const [compressingBox, setCompressingBox] = useState<'context' | 'closeup' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [photoGpsInfo, setPhotoGpsInfo] = useState<{ lat: number; lng: number } | null>(null);
 
   const contextInputRef = useRef<HTMLInputElement>(null);
   const closeupInputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +36,7 @@ export default function DualPhotoUploader({
     if (!file) return;
 
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic'].includes(file.type.toLowerCase())) {
-      setErrorMsg('รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP) เท่านั้น');
+      setErrorMsg('รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, HEIC) เท่านั้น');
       return;
     }
 
@@ -41,6 +44,15 @@ export default function DualPhotoUploader({
       setCompressingBox(type);
       setErrorMsg(null);
 
+      // 1. ดึงพิกัด GPS จาก EXIF Metadata ของรูปถ่าย (ถ้ากล้องมือถือเปิดบันทึกพิกัดไว้)
+      extractGpsFromImage(file).then((gps) => {
+        if (gps) {
+          setPhotoGpsInfo({ lat: gps.latitude, lng: gps.longitude });
+          onGpsDetected?.(gps.latitude, gps.longitude);
+        }
+      }).catch(() => {});
+
+      // 2. บีบอัดรูปภาพเป็น WebP
       const result = await compressImageToWebP(file, 1200, 1200, 0.75);
 
       if (type === 'context' && closeupHash && result.hash === closeupHash) {
@@ -125,6 +137,17 @@ export default function DualPhotoUploader({
         <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-700">
           <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
           <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {photoGpsInfo && (
+        <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-300 p-2.5 text-xs text-emerald-900 animate-fadeIn">
+          <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+          <div className="min-w-0">
+            <span className="font-bold">ตรวจพบพิกัดจากภาพถ่าย: </span>
+            <span className="font-mono text-[11px]">{photoGpsInfo.lat.toFixed(4)}, {photoGpsInfo.lng.toFixed(4)}</span>
+            <span className="text-emerald-700 text-[10px] ml-1">(ย้ายหมุดบนแผนที่อัตโนมัติ)</span>
+          </div>
         </div>
       )}
 

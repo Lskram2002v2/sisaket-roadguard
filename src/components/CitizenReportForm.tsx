@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti';
 import { Send, Phone, FileText, CheckCircle2, Sparkles, Copy, ArrowRight, MapPin } from 'lucide-react';
 import ReportMapPicker from './ReportMapPicker';
 import DualPhotoUploader from './DualPhotoUploader';
-import { SISAKET_CENTER, isWithinSisaket } from '@/lib/geofence';
+import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict } from '@/lib/geofence';
 import { roadStore } from '@/lib/db-store';
 import { playAlertChime } from '@/lib/audio-synth';
 import { uploadDataUrlToStorage } from '@/lib/image-processor';
@@ -231,6 +231,12 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
             onChange={(ctx, dmg) => {
               setContextPhoto(ctx);
               setCloseupPhoto(dmg);
+            }}
+            onGpsDetected={(photoLat, photoLng) => {
+              const nearest = findNearestDistrict(photoLat, photoLng);
+              setLat(photoLat);
+              setLng(photoLng);
+              setDistrict(nearest.name_th);
             }}
           />
         </div>

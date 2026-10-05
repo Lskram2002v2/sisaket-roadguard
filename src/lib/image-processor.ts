@@ -143,3 +143,26 @@ export async function uploadDataUrlToStorage(
     return dataUrl;
   }
 }
+
+/**
+ * ดึงพิกัด GPS ละติจูด/ลองจิจูดจากข้อมูล EXIF ของไฟล์ภาพถ่าย (เช่น ภาพที่ถ่ายด้วยกล้องมือถือ)
+ */
+export async function extractGpsFromImage(
+  file: File
+): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    const exifr = await import('exifr');
+    const gps = await exifr.default.gps(file);
+    if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
+      return {
+        latitude: gps.latitude,
+        longitude: gps.longitude,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn('EXIF GPS extraction notice:', err);
+    return null;
+  }
+}
+
