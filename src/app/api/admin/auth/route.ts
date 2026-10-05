@@ -26,7 +26,6 @@ export async function POST(req: Request) {
     const validPins = [
       process.env.ADMIN_PIN,
       process.env.NEXT_PUBLIC_ADMIN_PIN,
-      '1234',
       '5101',
     ].filter(Boolean);
 
