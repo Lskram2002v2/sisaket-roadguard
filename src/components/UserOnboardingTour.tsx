@@ -91,6 +91,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
 
   // Checklist State
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
+  const [isChecklistDismissed, setIsChecklistDismissed] = useState(false);
   const [checklist, setChecklist] = useState({
     exploredMap: false,
     checkedTracking: false,
@@ -109,6 +110,11 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
     if (!hasWelcomed) {
       const timer = setTimeout(() => setShowWelcomeModal(true), 600);
       return () => clearTimeout(timer);
+    }
+
+    const dismissed = localStorage.getItem('sisaket_checklist_dismissed');
+    if (dismissed === 'true') {
+      setIsChecklistDismissed(true);
     }
 
     const savedChecklist = localStorage.getItem('sisaket_checklist_state');
@@ -419,39 +425,54 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
       )}
 
       {/* 3. Floating Onboarding Checklist Widget (Interactive Walkthrough Quests) */}
-      <div className="fixed bottom-20 left-4 z-40">
-        {!isChecklistOpen ? (
-          <button
-            onClick={() => setIsChecklistOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-stone-900/90 text-white px-3.5 py-2 text-xs font-semibold shadow-xl backdrop-blur-md border border-amber-400/40 hover:bg-stone-900 transition-all hover:scale-105 active:scale-95"
-            title="คลิกเพื่อดูภารกิจเริ่มต้นใช้งาน"
-          >
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-stone-950 text-[10px] font-black">
-              {completedCount === totalTasks ? '✓' : `${completedCount}/${totalTasks}`}
-            </span>
-            <span>ภารกิจเรียนรู้ระบบ</span>
-            <span className="text-[10px] text-amber-300 font-mono">({progressPercent}%)</span>
-          </button>
-        ) : (
-          <div className="w-80 rounded-3xl bg-white p-4 shadow-2xl border border-stone-200 text-stone-900 space-y-3 animate-scaleUp">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-                  <Award className="h-4 w-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-stone-900">ภารกิจเริ่มต้นใช้งาน</h4>
-                  <span className="text-[10px] text-stone-500">สำเร็จ {completedCount} จาก {totalTasks} ข้อ</span>
-                </div>
-              </div>
+      {!isChecklistDismissed && (
+        <div className="fixed bottom-3 right-3 sm:bottom-6 sm:left-6 z-40">
+          {!isChecklistOpen ? (
+            <div className="flex items-center gap-1 bg-stone-900/90 text-white rounded-full p-1 pr-2 shadow-2xl backdrop-blur-md border border-amber-400/40 hover:bg-stone-900 transition-all hover:scale-105">
               <button
-                onClick={() => setIsChecklistOpen(false)}
-                className="rounded-full p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                onClick={() => setIsChecklistOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold py-1 px-2 text-left"
+                title="คลิกเพื่อดูภารกิจเริ่มต้นใช้งาน"
               >
-                <X className="h-4 w-4" />
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-stone-950 text-[10px] font-black shrink-0">
+                  {completedCount === totalTasks ? '✓' : `${completedCount}/${totalTasks}`}
+                </span>
+                <span className="text-[11px] font-bold">ภารกิจเรียนรู้</span>
+                <span className="text-[10px] text-amber-300 font-mono">({progressPercent}%)</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsChecklistDismissed(true);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('sisaket_checklist_dismissed', 'true');
+                  }
+                }}
+                className="rounded-full p-1 text-stone-400 hover:text-white hover:bg-white/20 transition-all"
+                title="ซ่อนแถบภารกิจ"
+              >
+                <X className="h-3 w-3" />
               </button>
             </div>
+          ) : (
+            <div className="w-[88vw] max-w-xs rounded-3xl bg-white p-4 shadow-2xl border border-stone-200 text-stone-900 space-y-3 animate-scaleUp">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                    <Award className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-900">ภารกิจเริ่มต้นใช้งาน</h4>
+                    <span className="text-[10px] text-stone-500">สำเร็จ {completedCount} จาก {totalTasks} ข้อ</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsChecklistOpen(false)}
+                  className="rounded-full p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
             {/* Progress Bar */}
             <div className="space-y-1">
@@ -561,6 +582,7 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
           </div>
         )}
       </div>
+    )}
     </>
   );
 }

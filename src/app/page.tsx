@@ -32,44 +32,44 @@ export default function HomePage() {
       {/* Main Container */}
       <div className="px-3 pt-4 pb-6 space-y-4 flex-1">
         {/* Modern Minimal Tab Switcher with Tour ID */}
-        <div id="tour-tab-switcher" className="grid grid-cols-3 gap-1.5 rounded-2xl bg-stone-200/70 p-1 text-xs font-semibold shadow-inner border border-stone-300/60">
+        <div id="tour-tab-switcher" className="grid grid-cols-3 gap-1 rounded-2xl bg-stone-200/70 p-1 text-xs font-semibold shadow-inner border border-stone-300/60">
           <button
             id="tour-tab-report-btn"
             onClick={() => setActiveTab('report')}
-            className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
+            className={`flex items-center justify-center gap-1 rounded-xl py-2 px-1 transition-all ${
               activeTab === 'report'
                 ? 'bg-white text-stone-950 shadow-md font-bold'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            <PlusCircle className={`h-4 w-4 ${activeTab === 'report' ? 'text-amber-600' : ''}`} />
-            <span>แจ้งถนนชำรุด</span>
+            <PlusCircle className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${activeTab === 'report' ? 'text-amber-600' : ''}`} />
+            <span className="text-[11px] sm:text-xs truncate">แจ้งถนนชำรุด</span>
           </button>
 
           <button
             id="tour-tab-track-btn"
             onClick={() => setActiveTab('track')}
-            className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
+            className={`flex items-center justify-center gap-1 rounded-xl py-2 px-1 transition-all ${
               activeTab === 'track'
                 ? 'bg-white text-stone-950 shadow-md font-bold'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            <Search className={`h-4 w-4 ${activeTab === 'track' ? 'text-amber-600' : ''}`} />
-            <span>ติดตามสถานะ</span>
+            <Search className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${activeTab === 'track' ? 'text-amber-600' : ''}`} />
+            <span className="text-[11px] sm:text-xs truncate">ติดตามสถานะ</span>
           </button>
 
           <button
             id="tour-tab-feed-btn"
             onClick={() => setActiveTab('feed')}
-            className={`flex items-center justify-center gap-1 rounded-xl py-2.5 transition-all ${
+            className={`flex items-center justify-center gap-1 rounded-xl py-2 px-1 transition-all ${
               activeTab === 'feed'
                 ? 'bg-white text-stone-950 shadow-md font-bold'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            <MapIcon className={`h-4 w-4 ${activeTab === 'feed' ? 'text-amber-600' : ''}`} />
-            <span>แผนที่สาธารณะ</span>
+            <MapIcon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${activeTab === 'feed' ? 'text-amber-600' : ''}`} />
+            <span className="text-[11px] sm:text-xs truncate">แผนที่สาธารณะ</span>
           </button>
         </div>
 

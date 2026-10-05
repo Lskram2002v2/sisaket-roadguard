@@ -127,36 +127,43 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
           <div className="grid grid-cols-3 gap-1 w-full rounded-2xl bg-stone-100 p-1 text-xs font-semibold">
             <button
               onClick={() => setActiveTab('my_wallet')}
-              className={`rounded-xl py-2 transition-all text-center truncate px-1 ${
+              className={`rounded-xl py-2 transition-all text-center px-1 flex items-center justify-center gap-1 ${
                 activeTab === 'my_wallet'
                   ? 'bg-amber-600 text-white shadow-sm font-bold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              ประวัติของฉัน ({myReports.length})
+              <span className="text-[11px] sm:text-xs">ของฉัน</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'my_wallet' ? 'bg-amber-700/80 text-white' : 'bg-stone-200 text-stone-700'}`}>
+                {myReports.length}
+              </span>
             </button>
 
             <button
               onClick={() => setActiveTab('community')}
-              className={`rounded-xl py-2 transition-all text-center truncate px-1 flex items-center justify-center gap-1 ${
+              className={`rounded-xl py-2 transition-all text-center px-1 flex items-center justify-center gap-1 ${
                 activeTab === 'community'
                   ? 'bg-amber-600 text-white shadow-sm font-bold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              <Globe className="h-3.5 w-3.5 shrink-0" />
-              <span>เคสอื่นๆ ({allReports.length})</span>
+              <Globe className="h-3 w-3 shrink-0" />
+              <span className="text-[11px] sm:text-xs">ส่วนรวม</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'community' ? 'bg-amber-700/80 text-white' : 'bg-stone-200 text-stone-700'}`}>
+                {allReports.length}
+              </span>
             </button>
 
             <button
               onClick={() => setActiveTab('search')}
-              className={`rounded-xl py-2 transition-all text-center truncate px-1 ${
+              className={`rounded-xl py-2 transition-all text-center px-1 flex items-center justify-center gap-1 ${
                 activeTab === 'search'
                   ? 'bg-amber-600 text-white shadow-sm font-bold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              ค้นหาด้วยรหัส
+              <Search className="h-3 w-3 shrink-0" />
+              <span className="text-[11px] sm:text-xs">ค้นหารหัส</span>
             </button>
           </div>
         </div>
@@ -286,40 +293,43 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
 
       {/* Selected Report Detail View */}
       {activeReport ? (
-        <div className="rounded-3xl bg-white p-5 shadow-sm border border-stone-200/90 space-y-5">
+        <div className="rounded-3xl bg-white p-4 sm:p-5 shadow-sm border border-stone-200/90 space-y-4">
           {/* Header of Report */}
-          <div className="flex items-start justify-between border-b border-stone-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-black font-mono text-stone-900">
+          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-stone-100 pb-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base sm:text-lg font-black font-mono text-stone-900">
                   {activeReport.tracking_code}
                 </span>
                 <StatusBadge status={activeReport.status} />
               </div>
-              <div className="flex items-center gap-1 text-xs text-stone-500 mt-1">
-                <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                <span>อ.{activeReport.district}</span>
-                <span>• แจ้งเมื่อ {new Date(activeReport.created_at).toLocaleDateString('th-TH')}</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-xs text-stone-500 mt-1">
+                <span className="flex items-center gap-0.5 font-medium text-stone-700">
+                  <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span>อ.{activeReport.district}</span>
+                </span>
+                <span className="text-stone-400">•</span>
+                <span>แจ้งเมื่อ {new Date(activeReport.created_at).toLocaleDateString('th-TH')}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => handleUpvote(activeReport.tracking_code)}
-                className="flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-800 border border-amber-200 active:scale-95 transition-all"
+                className="flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-800 border border-amber-200 active:scale-95 transition-all shadow-sm"
                 title="กดสนับสนุนเคสนี้"
               >
-                <ThumbsUp className="h-3.5 w-3.5" />
+                <ThumbsUp className="h-3.5 w-3.5 text-amber-600" />
                 <span>+{activeReport.upvote_count || 1}</span>
               </button>
 
               <button
                 onClick={handleShare}
-                className="rounded-xl bg-stone-100 p-2 text-stone-600 hover:bg-amber-100 hover:text-amber-800 transition-colors"
+                className="rounded-xl bg-stone-100 p-2 text-stone-600 hover:bg-amber-100 hover:text-amber-800 transition-colors active:scale-95 shadow-sm"
                 title="แชร์รายงาน"
               >
-                <Share2 className="h-4 w-4" />
+                <Share2 className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>

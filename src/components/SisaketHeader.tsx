@@ -65,7 +65,7 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
   const resolved = reports.filter((r) => r.status === 'RESOLVED').length;
 
   return (
-    <header className="relative w-full overflow-hidden rounded-b-3xl bg-stone-900 text-white shadow-lg">
+    <header className="relative w-full overflow-hidden rounded-b-3xl bg-stone-900 text-white shadow-xl">
       {/* Background Slideshow with subtle overlay */}
       <div className="absolute inset-0 z-0">
         {SISAKET_LANDMARKS.map((item, idx) => (
@@ -80,60 +80,62 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
             }}
           />
         ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-900/80 to-stone-900/60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-900/85 to-stone-900/65" />
       </div>
 
-      {/* Header Content */}
-      <div className="relative z-10 px-4 pt-5 pb-6">
-        {/* Top bar with Lamduan Emblem and Admin shortcut */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-300 shadow-inner">
-              <Sparkles className="h-5 w-5" />
+      {/* Header Content with 100% Mobile-Friendly Grid */}
+      <div className="relative z-10 px-3.5 pt-4 pb-5 space-y-3">
+        {/* Top Navbar Row */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Logo & Branding */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 shadow-inner">
+              <Sparkles className="h-4.5 w-4.5" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold uppercase tracking-widest text-amber-400">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-400">
                   SISAKET ROADGUARD
                 </span>
-                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 border border-emerald-400/30">
+                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-bold text-emerald-300 border border-emerald-400/30">
                   22 อำเภอ
                 </span>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-1">
-                ศรีสะเกษถนนดี <span className="text-amber-400 text-sm font-normal">🌸 สวย ไร้หลุม</span>
+              <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-white truncate">
+                ศรีสะเกษถนนดี <span className="text-amber-300 font-normal text-xs sm:text-sm">🌸 สวย ไร้หลุม</span>
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {onStartTour && (
               <button
                 onClick={onStartTour}
-                className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-2.5 py-1.5 text-xs font-semibold text-amber-300 backdrop-blur-md hover:bg-amber-500/30 transition-all border border-amber-400/30"
+                className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-2 py-1.5 text-xs font-bold text-amber-300 backdrop-blur-md hover:bg-amber-500/30 transition-all border border-amber-400/30 active:scale-95 shadow-sm"
                 title="เปิดแนะนำการใช้งานระบบ"
               >
-                <Compass className="h-3.5 w-3.5 text-amber-400" />
-                <span className="hidden sm:inline">วิธีใช้งาน</span>
+                <Compass className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] sm:text-xs">วิธีใช้งาน</span>
               </button>
             )}
 
             <Link
               href="/admin"
-              className="flex items-center gap-1 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-stone-200 backdrop-blur-md hover:bg-white/20 transition-all border border-white/10"
+              className="flex items-center gap-1 rounded-xl bg-white/10 px-2.5 py-1.5 text-xs font-medium text-stone-200 backdrop-blur-md hover:bg-white/20 transition-all border border-white/10 active:scale-95 shadow-sm"
             >
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-              <span>เจ้าหน้าที่</span>
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span className="text-[11px] sm:text-xs">เจ้าหน้าที่</span>
             </Link>
           </div>
         </div>
 
         {/* Tourist Landmark Tag & Slide Indicator */}
-        <div className="mt-4 flex items-center justify-between text-xs text-stone-300 bg-black/30 backdrop-blur-md rounded-xl px-3 py-1.5 border border-white/10">
-          <div className="flex items-center gap-1.5 truncate">
+        <div className="flex items-center justify-between text-[11px] text-stone-300 bg-black/40 backdrop-blur-md rounded-xl px-3 py-1.5 border border-white/10">
+          <div className="flex items-center gap-1.5 min-w-0 truncate">
             <Compass className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            <span className="truncate font-medium">{SISAKET_LANDMARKS[currentSlide].title}</span>
-            <span className="text-stone-400 text-[11px]">({SISAKET_LANDMARKS[currentSlide].district})</span>
+            <span className="truncate font-semibold text-stone-100">{SISAKET_LANDMARKS[currentSlide].title}</span>
+            <span className="text-stone-400 text-[10px] shrink-0">({SISAKET_LANDMARKS[currentSlide].district})</span>
           </div>
           <div className="flex gap-1 shrink-0 ml-2">
             {SISAKET_LANDMARKS.map((_, i) => (
@@ -141,37 +143,38 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
                 key={i}
                 onClick={() => setCurrentSlide(i)}
                 className={`h-1.5 rounded-full transition-all ${
-                  i === currentSlide ? 'w-4 bg-amber-400' : 'w-1.5 bg-white/30'
+                  i === currentSlide ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-white/30'
                 }`}
+                aria-label={`Slide ${i + 1}`}
               />
             ))}
           </div>
         </div>
 
-        {/* Quick Clean Stats Bar */}
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-2.5 backdrop-blur-sm">
-            <div className="flex items-center justify-center gap-1 text-[11px] text-stone-400">
+        {/* Clean Stats Bar (3 Equal Columns) */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-2 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-1 text-[10px] text-stone-400">
               <Clock className="h-3 w-3 text-amber-400" />
               <span>แจ้งทั้งหมด</span>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-white">{total}</div>
+            <div className="mt-0.5 text-base sm:text-lg font-extrabold text-white">{total}</div>
           </div>
 
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-2.5 backdrop-blur-sm">
-            <div className="flex items-center justify-center gap-1 text-[11px] text-amber-300">
-              <Wrench className="h-3 w-3 text-amber-400 animate-spin-slow" />
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-2 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-1 text-[10px] text-amber-300">
+              <Wrench className="h-3 w-3 text-amber-400" />
               <span>กำลังซ่อม</span>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-amber-400">{inProgress}</div>
+            <div className="mt-0.5 text-base sm:text-lg font-extrabold text-amber-400">{inProgress}</div>
           </div>
 
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-2.5 backdrop-blur-sm">
-            <div className="flex items-center justify-center gap-1 text-[11px] text-emerald-300">
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-2 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-300">
               <CheckCircle2 className="h-3 w-3 text-emerald-400" />
               <span>ซ่อมเสร็จแล้ว</span>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-emerald-400">{resolved}</div>
+            <div className="mt-0.5 text-base sm:text-lg font-extrabold text-emerald-400">{resolved}</div>
           </div>
         </div>
       </div>

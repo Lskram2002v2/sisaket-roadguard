@@ -267,20 +267,20 @@ export default function ReportMapPicker({
   return (
     <div className="space-y-3">
       {/* Map Header with Tailwind Styling */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-sm font-bold text-stone-900">
-          <MapPin className="h-4 w-4 text-amber-600" />
-          <span>ระบุจุดชำรุด (ขอบเขตจริง 22 อำเภอ)</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-stone-900 min-w-0 truncate">
+          <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="truncate">ระบุจุดชำรุด (22 อำเภอ)</span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Quick District Selector Dropdown */}
           <div className="relative">
             <select
               value={district}
               onChange={(e) => handleDistrictJump(e.target.value)}
               aria-label="เลือกอำเภอ"
-              className="rounded-xl border border-purple-300 bg-purple-50/80 px-2.5 py-1.5 text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
+              className="rounded-xl border border-purple-300 bg-purple-50/80 px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
             >
               {SISAKET_DISTRICTS.map((d) => (
                 <option key={d.id} value={d.name_th}>
@@ -294,10 +294,10 @@ export default function ReportMapPicker({
             type="button"
             onClick={handleGetLiveLocation}
             disabled={isLocating}
-            className="flex items-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-400 px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95"
           >
-            <Navigation className={`h-3.5 w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
-            <span>{isLocating ? 'ค้นหา GPS...' : 'พิกัดฉัน'}</span>
+            <Navigation className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
+            <span>{isLocating ? 'ค้นหา...' : 'พิกัดฉัน'}</span>
           </button>
         </div>
       </div>
@@ -313,7 +313,6 @@ export default function ReportMapPicker({
         </div>
       )}
 
-      {/* Outside Boundary Error */}
       {isOutside && (
         <div className="flex items-start gap-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 p-3 text-xs text-rose-900 shadow-sm">
           <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
@@ -329,9 +328,9 @@ export default function ReportMapPicker({
         <div ref={mapContainerRef} className="h-full w-full z-0" />
 
         {/* Real District Purple Boundary Badge Overlay */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-xl bg-purple-950/90 text-purple-100 px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur-md border border-purple-400/60 animate-fadeIn">
-          <span className="h-2.5 w-2.5 rounded-full bg-purple-400 animate-ping" />
-          <span>🟣 เส้นขอบเขตจริง: อ.{district || 'เมืองศรีสะเกษ'}</span>
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-xl bg-purple-950/90 text-purple-100 px-2.5 py-1 text-[10px] sm:text-xs font-bold shadow-lg backdrop-blur-md border border-purple-400/60 max-w-[85%] truncate animate-fadeIn">
+          <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping shrink-0" />
+          <span className="truncate">🟣 เส้นเขตจริง: อ.{district || 'เมืองศรีสะเกษ'}</span>
         </div>
 
         {/* Floating Pin Helper Badge */}
@@ -341,15 +340,15 @@ export default function ReportMapPicker({
       </div>
 
       {/* District & Coordinates Tailwind Capsule */}
-      <div className="flex items-center justify-between rounded-xl bg-purple-50/70 px-3.5 py-2.5 text-xs text-purple-950 border border-purple-200 shadow-sm">
-        <div className="flex items-center gap-1.5 truncate">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-xl bg-purple-50/70 px-3 py-2 text-xs text-purple-950 border border-purple-200 shadow-sm">
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
           <Layers className="h-3.5 w-3.5 text-purple-700 shrink-0" />
-          <span className="text-purple-800 font-medium">ขอบเขตอำเภอที่เลือก:</span>
+          <span className="text-purple-800 font-medium shrink-0">ขอบเขต:</span>
           <span className="font-black text-purple-900 truncate">
-            อ.{district || 'เมืองศรีสะเกษ'} (เส้นประสีม่วง)
+            อ.{district || 'เมืองศรีสะเกษ'}
           </span>
         </div>
-        <div className="text-[11px] text-purple-700 shrink-0 font-mono font-bold">
+        <div className="text-[10px] sm:text-[11px] text-purple-700 shrink-0 font-mono font-bold">
           {latitude.toFixed(4)}, {longitude.toFixed(4)}
         </div>
       </div>
