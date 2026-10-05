@@ -124,11 +124,25 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
         origin: { y: 0.6 },
         colors: ['#C27803', '#F59E0B', '#10B981', '#3B82F6'],
       });
+
+      // ล้างข้อมูลในฟอร์มทันที เพื่อให้พร้อมสำหรับการแจ้งครั้งต่อไป
+      resetForm();
     } catch (err) {
       setErrorMsg('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setContextPhoto('');
+    setCloseupPhoto('');
+    setLandmark('');
+    setSeverity('MEDIUM');
+    setLat(SISAKET_CENTER.lat);
+    setLng(SISAKET_CENTER.lng);
+    setDistrict('เมืองศรีสะเกษ');
+    setErrorMsg(null);
   };
 
   const handleCopyCode = () => {
@@ -177,17 +191,33 @@ export default function CitizenReportForm({ onSuccessNavigateToTrack }: Props) {
               *บันทึกรหัสลงในเครื่องของคุณอัตโนมัติ เปิดดูสถานะได้ตลอดเวลาโดยไม่ต้องล็อกอิน
             </p>
 
-            <button
-              onClick={() => {
-                const code = submittedCode;
-                setSubmittedCode(null);
-                onSuccessNavigateToTrack(code);
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-amber-700 active:scale-95 transition-all"
-            >
-              <span>ไปที่หน้าติดตามสถานะ</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const code = submittedCode;
+                  setSubmittedCode(null);
+                  resetForm();
+                  if (code) {
+                    onSuccessNavigateToTrack(code);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-amber-700 active:scale-95 transition-all"
+              >
+                <span>ไปที่หน้าติดตามสถานะ</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmittedCode(null);
+                  resetForm();
+                }}
+                className="w-full py-2 text-xs font-semibold text-stone-500 hover:text-stone-800 transition-colors"
+              >
+                แจ้งจุดอื่นเพิ่มเติม
+              </button>
+            </div>
           </div>
         </div>
       )}

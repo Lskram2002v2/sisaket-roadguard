@@ -28,6 +28,21 @@ export default function DualPhotoUploader({
   const contextInputRef = useRef<HTMLInputElement>(null);
   const closeupInputRef = useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    if (!contextPhotoUrl) {
+      setContextHash('');
+      if (contextInputRef.current) contextInputRef.current.value = '';
+    }
+    if (!closeupPhotoUrl) {
+      setCloseupHash('');
+      if (closeupInputRef.current) closeupInputRef.current.value = '';
+    }
+    if (!contextPhotoUrl && !closeupPhotoUrl) {
+      setPhotoGpsInfo(null);
+      setErrorMsg(null);
+    }
+  }, [contextPhotoUrl, closeupPhotoUrl]);
+
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
     type: 'context' | 'closeup'

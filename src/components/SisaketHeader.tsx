@@ -130,8 +130,12 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
         <div className="flex items-center justify-between gap-2">
           {/* Logo & Branding */}
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 shadow-inner">
-              <Sparkles className="h-4.5 w-4.5" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 shadow-md overflow-hidden p-0.5">
+              <img
+                src="/icons/lamduan-road-icon-4.jpg"
+                alt="Sisaket RoadGuard Logo"
+                className="h-full w-full object-cover rounded-lg"
+              />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">

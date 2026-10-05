@@ -5,6 +5,11 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Sisaket RoadGuard | ศรีสะเกษ ถนนสวย ปลอดภัย ไร้หลุม',
   description: 'ระบบรายงานและติดตามถนนชำรุด หลุมบ่อ จังหวัดศรีสะเกษ 22 อำเภอ รวดเร็ว ปลอดภัย โปร่งใส',
+  icons: {
+    icon: '/icons/lamduan-road-icon-4.jpg',
+    shortcut: '/icons/lamduan-road-icon-4.jpg',
+    apple: '/icons/lamduan-road-icon-4.jpg',
+  },
 };
 
 export const viewport: Viewport = {
