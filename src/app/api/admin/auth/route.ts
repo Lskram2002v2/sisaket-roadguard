@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { signAdminToken, checkRateLimit, getClientIp } from '@/lib/security';
+import { signAdminToken, revokeAdminToken, extractTokenFromRequest, checkRateLimit, getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: 60 * 60 * 12, // 12 hours
     });
 
     return response;
@@ -72,4 +72,33 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * DELETE /api/admin/auth
+ * Logout and invalidate session token instantly
+ */
+export async function DELETE(req: Request) {
+  const token = extractTokenFromRequest(req);
+  if (token) {
+    revokeAdminToken(token);
+  }
+
+  const response = NextResponse.json({
+    success: true,
+    message: 'ออกจากระบบเรียบร้อยแล้ว',
+  });
+
+  // Expire cookie immediately
+  response.cookies.set({
+    name: 'sisaket_admin_session',
+    value: '',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  });
+
+  return response;
 }

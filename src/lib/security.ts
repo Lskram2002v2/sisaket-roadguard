@@ -7,6 +7,9 @@ const SESSION_SECRET =
     ? 'sisaket-prod-guard-secret-salt-2026-secure-key'
     : 'sisaket-roadguard-secure-secret-key-2026');
 
+// In-Memory Revoked Tokens Set (Token Blacklist for instant logout invalidation)
+const revokedTokensSet = new Set<string>();
+
 export function signAdminToken(payload: { role: string; timestamp: number }): string {
   const data = JSON.stringify(payload);
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
@@ -16,8 +19,14 @@ export function signAdminToken(payload: { role: string; timestamp: number }): st
   return token;
 }
 
+export function revokeAdminToken(token: string): void {
+  if (token) {
+    revokedTokensSet.add(token);
+  }
+}
+
 export function verifyAdminToken(token: string): boolean {
-  if (!token) return false;
+  if (!token || revokedTokensSet.has(token)) return false;
   try {
     const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
     const { data, signature } = decoded;
@@ -34,10 +43,10 @@ export function verifyAdminToken(token: string): boolean {
     }
 
     const payload = JSON.parse(data);
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000; // 12-hour session lifetime
 
-    // Check expiration (24 hours)
-    if (Date.now() - payload.timestamp > ONE_DAY_MS) {
+    // Check expiration (12 hours)
+    if (Date.now() - payload.timestamp > TWELVE_HOURS_MS) {
       return false;
     }
 
@@ -65,6 +74,37 @@ export function isAuthorized(req: Request): boolean {
   }
 
   return false;
+}
+
+/**
+ * Extract token from request (for logout / revocation)
+ */
+export function extractTokenFromRequest(req: Request): string | null {
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  const cookieHeader = req.headers.get('cookie');
+  if (cookieHeader) {
+    const match = cookieHeader.match(/sisaket_admin_session=([^;]+)/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Validate Origin / Referer header to prevent CSRF on mutating requests
+ */
+export function validateOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin');
+  const host = req.headers.get('host');
+  if (!origin || !host) return true; // Server-to-server or non-browser request
+  try {
+    const originHost = new URL(origin).host;
+    return originHost === host;
+  } catch {
+    return false;
+  }
 }
 
 /**

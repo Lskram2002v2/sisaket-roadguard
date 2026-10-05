@@ -204,7 +204,14 @@ class RoadReportStore {
 
   private save() {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.reports));
+      const sanitizedReports = this.reports.map((r) => ({
+        ...r,
+        reporter_phone:
+          r.reporter_phone && r.reporter_phone.length > 6 && !r.reporter_phone.includes('XXX')
+            ? `${r.reporter_phone.substring(0, 3)}-XXX-${r.reporter_phone.substring(r.reporter_phone.length - 4)}`
+            : r.reporter_phone,
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedReports));
       this.notifyListeners();
     }
   }
