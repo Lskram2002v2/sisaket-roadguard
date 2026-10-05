@@ -67,6 +67,15 @@ export default function ReportMapPicker({
   const accuracyCircleRef = useRef<any>(null);
   const allDistrictsLayerRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
+  const watchIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const loadReports = async () => {
@@ -264,7 +273,7 @@ export default function ReportMapPicker({
   };
 
   /**
-   * ดึงตำแหน่ง GPS สดเมื่อผู้ใช้กดปุ่ม "พิกัดฉัน"
+   * ดึงตำแหน่ง GPS ดาวเทียมความแม่นยำสูง (Multi-Sample Satellite Convergence Engine)
    */
   const handleGetLiveLocation = async () => {
     if (!navigator.geolocation) {
@@ -275,53 +284,105 @@ export default function ReportMapPicker({
     const L = await import('leaflet');
     setIsLocating(true);
     setGeoError(null);
-    setGpsStatusInfo(null);
+    setGpsStatusInfo({
+      type: 'info',
+      text: '🛰️ กำลังค้นหาสัญญาณดาวเทียม GPS ความแม่นยำสูง (รอสักครู่ 2-3 วินาที)...',
+    });
 
-    navigator.geolocation.getCurrentPosition(
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    let bestAccuracy = Infinity;
+    let bestPos: GeolocationPosition | null = null;
+    let samplesReceived = 0;
+
+    const applyGpsPosition = (pos: GeolocationPosition) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const accuracy = Math.round(pos.coords.accuracy || 10);
+
+      if (accuracyCircleRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+      }
+
+      if (mapInstanceRef.current && markerRef.current) {
+        accuracyCircleRef.current = L.circle([lat, lng], {
+          radius: accuracy,
+          color: '#2563EB',
+          weight: 2,
+          fillColor: '#3B82F6',
+          fillOpacity: 0.15,
+        }).addTo(mapInstanceRef.current);
+
+        mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
+        markerRef.current.setLatLng([lat, lng]);
+      }
+
+      handlePositionUpdate(lat, lng);
+      const nearest = findNearestDistrict(lat, lng);
+
+      if (isWithinSisaket(lat, lng)) {
+        setGpsStatusInfo({
+          type: 'success',
+          text: `🎯 ล็อกพิกัดดาวเทียม GPS สำเร็จ: อ.${nearest.name_th} (ความแม่นยำ ±${accuracy} ม.)`,
+        });
+      } else {
+        setGpsStatusInfo({
+          type: 'warning',
+          text: `📶 พิกัดเครือข่ายอินเทอร์เน็ต (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกเขต จ.ศรีสะเกษ — สามารถพิมพ์ค้นหาหรือเลือก 22 อำเภอได้ครับ`,
+        });
+      }
+    };
+
+    const maxWaitTimeout = setTimeout(() => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setIsLocating(false);
+      if (bestPos) {
+        applyGpsPosition(bestPos);
+      }
+    }, 5500);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setIsLocating(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = Math.round(pos.coords.accuracy || 10);
+        samplesReceived++;
+        const acc = pos.coords.accuracy;
 
-        // หากพิกัดอยู่ในศรีสะเกษ
-        if (isWithinSisaket(lat, lng)) {
-          if (mapInstanceRef.current && markerRef.current) {
-            if (accuracyCircleRef.current) {
-              mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
-            }
-            accuracyCircleRef.current = L.circle([lat, lng], {
-              radius: accuracy,
-              color: '#2563EB',
-              weight: 1.5,
-              fillColor: '#3B82F6',
-              fillOpacity: 0.15,
-            }).addTo(mapInstanceRef.current);
+        if (acc < bestAccuracy) {
+          bestAccuracy = acc;
+          bestPos = pos;
+        }
 
-            mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
-            markerRef.current.setLatLng([lat, lng]);
+        setGpsStatusInfo({
+          type: 'info',
+          text: `🛰️ กำลังรับสัญญาณดาวเทียม (ความแม่นยำปัจจุบัน: ±${Math.round(acc)} ม.)...`,
+        });
+
+        // เมื่อได้ความแม่นยำระดับดาวเทียม (< 25 เมตร) หรือรับสัญญาณเกิน 4 รอบ ให้ล็อกพิกัดทันที
+        if (acc <= 25 || samplesReceived >= 4) {
+          clearTimeout(maxWaitTimeout);
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
           }
-
-          handlePositionUpdate(lat, lng);
-          const nearest = findNearestDistrict(lat, lng);
-
-          setGpsStatusInfo({
-            type: 'success',
-            text: `🎯 ล็อกพิกัด GPS แม่นยำ: อ.${nearest.name_th} (ความคลาดเคลื่อน ±${accuracy} ม.)`,
-          });
-        } else {
-          // หากพิกัดอยู่นอกศรีสะเกษ (เช่น ใช้งานบนคอมพิวเตอร์/Wi-Fi ที่ IP อยู่ กทม. หรือต่างจังหวัด)
-          setGpsStatusInfo({
-            type: 'warning',
-            text: `📶 ตำแหน่งจากเครือข่ายอินเทอร์เน็ต (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกพื้นที่ จ.ศรีสะเกษ — ท่านสามารถพิมพ์ค้นหาชื่อสถานที่ หรือเลือก 22 อำเภอเพื่อปักหมุดจุดชำรุดได้ทันที`,
-          });
+          setIsLocating(false);
+          applyGpsPosition(pos);
         }
       },
       (err) => {
+        clearTimeout(maxWaitTimeout);
         setIsLocating(false);
-        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาอนุญาตสิทธิ์ตำแหน่งในเบราว์เซอร์ หรือค้นหา/เลือกอำเภอในรายการด้านบนครับ');
+        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาเปิด Location Service ในการตั้งค่ามือถือ หรือค้นหาชื่อสถานที่ด้านบนแทนครับ');
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
     );
   };
 
