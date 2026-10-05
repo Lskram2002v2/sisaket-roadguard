@@ -26,6 +26,10 @@ import {
   ExternalLink,
   Database,
   Info,
+  Settings,
+  Trash2,
+  Edit3,
+  Save,
 } from 'lucide-react';
 import { RoadReport, ReportStatus, SeverityLevel } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
@@ -50,6 +54,15 @@ export default function AdminCommandCenter() {
   const [errorPin, setErrorPin] = useState(false);
   const [zoomPhoto, setZoomPhoto] = useState<string | null>(null);
   const [showDbModal, setShowDbModal] = useState(false);
+
+  // Edit / Delete Case States
+  const [editingReport, setEditingReport] = useState<RoadReport | null>(null);
+  const [editDistrict, setEditDistrict] = useState('');
+  const [editLandmark, setEditLandmark] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editSeverity, setEditSeverity] = useState<SeverityLevel>('MEDIUM');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -258,6 +271,68 @@ export default function AdminCommandCenter() {
     setActiveReport(updated || null);
     setIsUpdating(false);
     playAlertChime('success');
+  };
+
+  const handleOpenEditModal = (rep: RoadReport, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingReport(rep);
+    setEditDistrict(rep.district);
+    setEditLandmark(rep.landmark_description);
+    setEditPhone(rep.reporter_phone);
+    setEditSeverity(rep.severity_level);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReport) return;
+    setIsSavingEdit(true);
+
+    await roadStore.editReportDetails(editingReport.id, {
+      district: editDistrict,
+      landmark_description: editLandmark,
+      reporter_phone: editPhone,
+      severity_level: editSeverity,
+    });
+
+    await loadData();
+
+    if (activeReport?.id === editingReport.id) {
+      setActiveReport((prev) =>
+        prev
+          ? {
+              ...prev,
+              district: editDistrict,
+              landmark_description: editLandmark,
+              reporter_phone: editPhone,
+              severity_level: editSeverity,
+            }
+          : null
+      );
+    }
+
+    setIsSavingEdit(false);
+    setEditingReport(null);
+    playAlertChime('success');
+  };
+
+  const handleDeleteCase = async (rep: RoadReport) => {
+    if (!confirm(`⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบเคส "${rep.tracking_code}" (${rep.landmark_description}) ออกจากฐานข้อมูลอย่างถาวร?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    await roadStore.deleteReport(rep.id);
+    await loadData();
+
+    if (activeReport?.id === rep.id) {
+      setActiveReport(null);
+    }
+    if (editingReport?.id === rep.id) {
+      setEditingReport(null);
+    }
+
+    setIsDeleting(false);
+    playAlertChime('warning');
   };
 
   const exportCSV = () => {
@@ -483,6 +558,126 @@ export default function AdminCommandCenter() {
                 className="w-full rounded-2xl bg-stone-900 py-2.5 text-xs font-bold text-white hover:bg-stone-800 active:scale-98 transition-all"
               >
                 เข้าใจแล้ว / ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / Delete Case Modal */}
+      {editingReport && (
+        <div
+          onClick={() => setEditingReport(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-stone-200 text-stone-800 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                  <Settings className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">
+                    จัดการข้อมูลเคส ({editingReport.tracking_code})
+                  </h3>
+                  <p className="text-xs text-stone-500">แก้ไขหรือลบเคสออกจากฐานข้อมูล Supabase</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingReport(null)}
+                className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              {/* District */}
+              <div className="space-y-1">
+                <label className="font-bold text-stone-700">อำเภอในศรีสะเกษ:</label>
+                <select
+                  value={editDistrict}
+                  onChange={(e) => setEditDistrict(e.target.value)}
+                  className="w-full rounded-xl border border-stone-300 p-2.5 text-xs text-stone-900 bg-stone-50 focus:border-amber-500 focus:outline-none"
+                >
+                  {SISAKET_DISTRICTS.map((d) => (
+                    <option key={d.id} value={d.name_th}>
+                      อ.{d.name_th}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Severity */}
+              <div className="space-y-1">
+                <label className="font-bold text-stone-700">ระดับความรุนแรง:</label>
+                <select
+                  value={editSeverity}
+                  onChange={(e) => setEditSeverity(e.target.value as SeverityLevel)}
+                  className="w-full rounded-xl border border-stone-300 p-2.5 text-xs text-stone-900 bg-stone-50 focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="LOW">LOW (ความเสียหายเล็กน้อย)</option>
+                  <option value="MEDIUM">MEDIUM (ปานกลาง)</option>
+                  <option value="HIGH">HIGH (อันตรายสูง / หลุมลึก)</option>
+                  <option value="CRITICAL">CRITICAL (วิกฤต / สัญจรไม่ได้)</option>
+                </select>
+              </div>
+
+              {/* Reporter Phone */}
+              <div className="space-y-1">
+                <label className="font-bold text-stone-700">เบอร์โทรศัพท์ผู้แจ้ง:</label>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, ''))}
+                  className="w-full rounded-xl border border-stone-300 p-2.5 text-xs text-stone-900 bg-stone-50 focus:border-amber-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Landmark */}
+              <div className="space-y-1">
+                <label className="font-bold text-stone-700">จุดสังเกต / สถานที่ใกล้เคียง:</label>
+                <textarea
+                  rows={3}
+                  value={editLandmark}
+                  onChange={(e) => setEditLandmark(e.target.value)}
+                  className="w-full rounded-xl border border-stone-300 p-2.5 text-xs text-stone-900 bg-stone-50 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 py-2.5 text-xs font-bold text-white shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{isSavingEdit ? 'กำลังบันทึก...' : 'บันทึกการแก้ไขลงฐานข้อมูล'}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Danger Zone: Delete Case */}
+            <div className="border-t border-rose-100 pt-3 space-y-2">
+              <div className="flex items-center gap-1 text-xs font-bold text-rose-700">
+                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                <span>ลบเคสออกจากระบบถาวร</span>
+              </div>
+              <p className="text-[11px] text-stone-500">
+                หากเคสนี้เป็นข้อมูลทดสอบ สแปม หรือรายงานซ้ำซ้อน สามารถลบออกจากฐานข้อมูล Supabase ได้ทันที
+              </p>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleDeleteCase(editingReport)}
+                className="w-full rounded-xl bg-rose-50 border border-rose-300 hover:bg-rose-100 py-2.5 text-xs font-bold text-rose-700 shadow-sm active:scale-98 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="h-4 w-4 text-rose-600" />
+                <span>{isDeleting ? 'กำลังลบ...' : 'ลบเคสนี้ออกจากฐานข้อมูล'}</span>
               </button>
             </div>
           </div>
@@ -745,6 +940,15 @@ export default function AdminCommandCenter() {
                         <Navigation className="h-3.5 w-3.5" />
                         <span>นำทาง</span>
                       </a>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEditModal(rep, e)}
+                        className="flex items-center justify-center rounded-xl bg-stone-100 hover:bg-amber-100 p-2 text-stone-700 hover:text-amber-800 border border-stone-300 shadow-sm active:scale-95 transition-all"
+                        title="จัดการ / แก้ไข / ลบเคสนี้จากฐานข้อมูล"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
 

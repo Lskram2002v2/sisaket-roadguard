@@ -333,6 +333,69 @@ class RoadReportStore {
     return true;
   }
 
+  public async deleteReport(idOrCode: string): Promise<boolean> {
+    const targetIndex = this.reports.findIndex(
+      (r) => r.id === idOrCode || r.tracking_code.toUpperCase() === idOrCode.toUpperCase()
+    );
+
+    if (targetIndex === -1) return false;
+
+    const target = this.reports[targetIndex];
+    this.reports.splice(targetIndex, 1);
+    this.save();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('road_reports')
+          .delete()
+          .eq('tracking_code', target.tracking_code);
+      } catch (err) {
+        console.warn('Supabase delete failed:', err);
+      }
+    }
+
+    this.notifyListeners();
+    return true;
+  }
+
+  public async editReportDetails(
+    idOrCode: string,
+    updates: Partial<Omit<RoadReport, 'id' | 'tracking_code' | 'created_at'>>
+  ): Promise<boolean> {
+    const target = this.reports.find(
+      (r) => r.id === idOrCode || r.tracking_code.toUpperCase() === idOrCode.toUpperCase()
+    );
+
+    if (!target) return false;
+
+    Object.assign(target, updates, { updated_at: new Date().toISOString() });
+    this.save();
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('road_reports')
+          .update({
+            district: target.district,
+            subdistrict: target.subdistrict,
+            landmark_description: target.landmark_description,
+            reporter_phone: target.reporter_phone,
+            severity_level: target.severity_level,
+            latitude: target.latitude,
+            longitude: target.longitude,
+            updated_at: target.updated_at,
+          })
+          .eq('tracking_code', target.tracking_code);
+      } catch (err) {
+        console.warn('Supabase edit failed:', err);
+      }
+    }
+
+    this.notifyListeners();
+    return true;
+  }
+
   public getMyReportedCodes(): string[] {
     if (typeof window === 'undefined') return [];
     try {

@@ -179,6 +179,12 @@ TO anon, authenticated
 USING (true)
 WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow delete road reports" ON public.road_reports;
+CREATE POLICY "Allow delete road reports" 
+ON public.road_reports FOR DELETE 
+TO anon, authenticated 
+USING (true);
+
 DROP POLICY IF EXISTS "Allow public read districts" ON public.districts;
 CREATE POLICY "Allow public read districts" 
 ON public.districts FOR SELECT 
@@ -196,6 +202,12 @@ CREATE POLICY "Allow insert timeline"
 ON public.report_timeline FOR INSERT 
 TO anon, authenticated 
 WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow delete timeline" ON public.report_timeline;
+CREATE POLICY "Allow delete timeline" 
+ON public.report_timeline FOR DELETE 
+TO anon, authenticated 
+USING (true);
 
 -- 8. STORAGE BUCKET & POLICIES
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

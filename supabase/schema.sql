@@ -202,6 +202,11 @@ TO anon, authenticated
 USING (true)
 WITH CHECK (true);
 
+CREATE POLICY "Allow delete road reports" 
+ON public.road_reports FOR DELETE 
+TO anon, authenticated 
+USING (true);
+
 -- นโยบายตาราง districts & timeline (อ่านได้ทุกคน)
 CREATE POLICY "Allow public read districts" 
 ON public.districts FOR SELECT 
@@ -217,6 +222,11 @@ CREATE POLICY "Allow insert timeline"
 ON public.report_timeline FOR INSERT 
 TO anon, authenticated 
 WITH CHECK (true);
+
+CREATE POLICY "Allow delete timeline" 
+ON public.report_timeline FOR DELETE 
+TO anon, authenticated 
+USING (true);
 
 -- ------------------------------------------------------------------------------
 -- 10. เปิดใช้งาน Realtime Publication
