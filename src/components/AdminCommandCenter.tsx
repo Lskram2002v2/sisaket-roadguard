@@ -463,7 +463,21 @@ export default function AdminCommandCenter() {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  if (confirm('คุณต้องการล้างคำร้องทั้งหมดในระบบใช่หรือไม่? (ข้อมูล 22 อำเภอจะยังคงอยู่)')) {
+                    await roadStore.clearAll();
+                    await loadData();
+                    setShowDbModal(false);
+                    alert('ล้างข้อมูลคำร้องทั้งหมดเรียบร้อยแล้ว');
+                  }
+                }}
+                className="w-full rounded-2xl bg-rose-50 border border-rose-200 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 active:scale-98 transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>🗑️ ล้างคำร้องทั้งหมดเพื่อเริ่มทดสอบใหม่</span>
+              </button>
+
               <button
                 onClick={() => setShowDbModal(false)}
                 className="w-full rounded-2xl bg-stone-900 py-2.5 text-xs font-bold text-white hover:bg-stone-800 active:scale-98 transition-all"

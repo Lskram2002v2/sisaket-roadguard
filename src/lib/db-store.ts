@@ -137,7 +137,7 @@ class RoadReportStore {
           .from('road_reports')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           this.reports = data;
           this.save();
           return data;
@@ -147,6 +147,24 @@ class RoadReportStore {
       }
     }
     return [...this.reports];
+  }
+
+  public async clearAll(): Promise<void> {
+    this.reports = [];
+    this.save();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(MY_REPORTS_KEY);
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('report_timeline').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from('road_reports').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (err) {
+        console.warn('Supabase clear failed:', err);
+      }
+    }
+    this.notifyListeners();
   }
 
   public getReportByCode(code: string): RoadReport | undefined {
