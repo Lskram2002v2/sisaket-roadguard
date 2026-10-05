@@ -28,7 +28,7 @@ export default function SponsorBannerCarousel() {
     return () => unsub();
   }, []);
 
-  // Auto-play timer
+  // Auto-play timer (4.5s)
   useEffect(() => {
     if (banners.length <= 1 || isPaused) return;
 
@@ -60,9 +60,9 @@ export default function SponsorBannerCarousel() {
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartXRef.current === null) return;
     const diff = touchStartXRef.current - e.changedTouches[0].clientX;
-    if (diff > 40) {
+    if (diff > 35) {
       handleNext();
-    } else if (diff < -40) {
+    } else if (diff < -35) {
       handlePrev();
     }
     touchStartXRef.current = null;
@@ -73,93 +73,127 @@ export default function SponsorBannerCarousel() {
     window.open(link, '_blank', 'noopener,noreferrer');
   };
 
-  // Generate 5 slots for the 3D Coverflow Deck (-2, -1, 0, 1, 2)
-  const deckSlots = [-2, -1, 0, 1, 2].map((offset) => {
-    const rawIdx = (currentIndex + offset + banners.length * 100) % banners.length;
-    return {
-      offset,
-      item: banners[rawIdx],
-      index: rawIdx,
-    };
-  });
+  // Ensure we have a smooth list of items for the deck
+  // If fewer than 5 items, create virtual duplicates with stable unique IDs
+  const displayItems: Array<{ item: SponsorBanner; uniqueKey: string; originalIndex: number }> = [];
+  if (banners.length > 0) {
+    if (banners.length >= 5) {
+      banners.forEach((b, idx) => {
+        displayItems.push({ item: b, uniqueKey: b.id, originalIndex: idx });
+      });
+    } else {
+      // Repeat to have at least 5-6 cards so the 3D deck never has empty edges
+      const repeatCount = Math.ceil(5 / banners.length);
+      for (let r = 0; r < repeatCount; r++) {
+        banners.forEach((b, idx) => {
+          displayItems.push({
+            item: b,
+            uniqueKey: `${b.id}-rep-${r}`,
+            originalIndex: idx,
+          });
+        });
+      }
+    }
+  }
+
+  const totalDisplay = displayItems.length;
 
   return (
     <section
-      className="relative w-full overflow-hidden select-none py-4 space-y-4"
+      className="relative w-full overflow-hidden select-none py-3 space-y-3.5"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      aria-label="3D Simple Image Carousel"
+      aria-label="3D Smooth Image Carousel"
     >
       {/* 3D Layered Card Deck Container */}
-      <div className="relative flex items-center justify-center h-48 sm:h-60 md:h-72 w-full perspective-[1000px]">
-        {deckSlots.map(({ offset, item, index }) => {
-          const isCenter = offset === 0;
-          const isFlankingLeft = offset === -1;
-          const isFlankingRight = offset === 1;
-          const isOuterLeft = offset === -2;
-          const isOuterRight = offset === 2;
+      <div
+        className="relative flex items-center justify-center h-48 sm:h-60 md:h-72 w-full"
+        style={{ perspective: '1200px' }}
+      >
+        {displayItems.map(({ item, uniqueKey, originalIndex }, idx) => {
+          // Calculate relative circular difference from current active index
+          let diff = idx - (currentIndex % banners.length);
 
-          let transformClass = '';
-          let zIndexClass = '';
-          let opacityClass = '';
-          let scaleClass = '';
+          if (diff > totalDisplay / 2) {
+            diff -= totalDisplay;
+          } else if (diff < -totalDisplay / 2) {
+            diff += totalDisplay;
+          }
+
+          const isCenter = diff === 0;
+          const isFlankingLeft = diff === -1;
+          const isFlankingRight = diff === 1;
+          const isOuterLeft = diff === -2;
+          const isOuterRight = diff === 2;
+          const isHidden = Math.abs(diff) > 2;
+
+          let transformStyle = '';
+          let zIndex = 0;
+          let opacity = 0;
 
           if (isCenter) {
-            transformClass = 'translate-x-0';
-            scaleClass = 'scale-100';
-            zIndexClass = 'z-30';
-            opacityClass = 'opacity-100';
+            transformStyle = 'translateX(0%) scale(1) translateZ(0px) rotateY(0deg)';
+            zIndex = 30;
+            opacity = 1;
           } else if (isFlankingLeft) {
-            transformClass = '-translate-x-[48%] sm:-translate-x-[54%]';
-            scaleClass = 'scale-[0.84] sm:scale-[0.88]';
-            zIndexClass = 'z-20';
-            opacityClass = 'opacity-80 sm:opacity-90';
+            transformStyle = 'translateX(-52%) scale(0.85) translateZ(-70px) rotateY(6deg)';
+            zIndex = 20;
+            opacity = 0.85;
           } else if (isFlankingRight) {
-            transformClass = 'translate-x-[48%] sm:translate-x-[54%]';
-            scaleClass = 'scale-[0.84] sm:scale-[0.88]';
-            zIndexClass = 'z-20';
-            opacityClass = 'opacity-80 sm:opacity-90';
+            transformStyle = 'translateX(52%) scale(0.85) translateZ(-70px) rotateY(-6deg)';
+            zIndex = 20;
+            opacity = 0.85;
           } else if (isOuterLeft) {
-            transformClass = '-translate-x-[90%] sm:-translate-x-[98%]';
-            scaleClass = 'scale-[0.68] sm:scale-[0.74]';
-            zIndexClass = 'z-10';
-            opacityClass = 'opacity-40 sm:opacity-55';
+            transformStyle = 'translateX(-94%) scale(0.70) translateZ(-140px) rotateY(12deg)';
+            zIndex = 10;
+            opacity = 0.45;
           } else if (isOuterRight) {
-            transformClass = 'translate-x-[90%] sm:translate-x-[98%]';
-            scaleClass = 'scale-[0.68] sm:scale-[0.74]';
-            zIndexClass = 'z-10';
-            opacityClass = 'opacity-40 sm:opacity-55';
+            transformStyle = 'translateX(94%) scale(0.70) translateZ(-140px) rotateY(-12deg)';
+            zIndex = 10;
+            opacity = 0.45;
+          } else {
+            transformStyle = `translateX(${diff > 0 ? '140%' : '-140%'}) scale(0.55) translateZ(-200px)`;
+            zIndex = 1;
+            opacity = 0;
           }
 
           const imageUrl = normalizeImageUrl(item.image_url);
 
           return (
             <div
-              key={`${item.id}-${offset}`}
+              key={uniqueKey}
               onClick={() => {
                 if (isCenter) {
                   handleCenterClick(item.target_link);
                 } else {
-                  setCurrentIndex(index);
+                  setCurrentIndex(originalIndex);
                 }
               }}
-              className={`absolute top-0 bottom-0 w-[72%] sm:w-[60%] md:w-[50%] transition-all duration-500 ease-out transform cursor-pointer ${transformClass} ${scaleClass} ${zIndexClass} ${opacityClass}`}
-              style={{ willChange: 'transform, opacity' }}
+              className="absolute top-0 bottom-0 w-[72%] sm:w-[60%] md:w-[50%] cursor-pointer"
+              style={{
+                transform: transformStyle,
+                zIndex,
+                opacity,
+                pointerEvents: isHidden ? 'none' : 'auto',
+                transition: 'all 600ms cubic-bezier(0.25, 1, 0.5, 1)',
+                willChange: 'transform, opacity',
+                transformStyle: 'preserve-3d',
+              }}
             >
               <div
-                className={`relative h-full w-full rounded-3xl sm:rounded-[32px] overflow-hidden bg-stone-900 shadow-xl border ${
+                className={`relative h-full w-full rounded-3xl sm:rounded-[32px] overflow-hidden bg-stone-900 shadow-xl border transition-shadow duration-500 ${
                   isCenter
                     ? 'border-amber-400/40 shadow-2xl ring-1 ring-amber-400/20'
-                    : 'border-stone-800/80'
+                    : 'border-stone-800/80 shadow-md'
                 }`}
               >
-                {/* Clean Image */}
+                {/* Full Banner Image */}
                 <img
                   src={imageUrl}
-                  alt={item.title || `Slide ${index + 1}`}
-                  className="h-full w-full object-cover object-center pointer-events-none"
+                  alt={item.title || `Slide ${originalIndex + 1}`}
+                  className="h-full w-full object-cover object-center pointer-events-none select-none"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     const thumbUrl = getGoogleDriveThumbnailUrl(item.image_url);
@@ -171,7 +205,7 @@ export default function SponsorBannerCarousel() {
                   }}
                 />
 
-                {/* Subtle external link badge on center active card */}
+                {/* Subtle external link icon on active card if target link exists */}
                 {isCenter && item.target_link && (
                   <div className="absolute top-3 right-3 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-amber-300 backdrop-blur-md border border-white/20 shadow-md">
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -188,7 +222,7 @@ export default function SponsorBannerCarousel() {
         {/* Left Arrow Button */}
         <button
           onClick={handlePrev}
-          className="p-1.5 rounded-full text-stone-400 hover:text-amber-500 hover:bg-stone-100 transition-all active:scale-95"
+          className="p-1.5 rounded-full text-stone-400 hover:text-amber-600 hover:bg-stone-200/60 transition-all active:scale-90"
           aria-label="ย้อนกลับ"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -204,7 +238,7 @@ export default function SponsorBannerCarousel() {
                 onClick={() => setCurrentIndex(i)}
                 className={`transition-all duration-300 rounded-full ${
                   isActive
-                    ? 'w-4 h-2 bg-purple-600 sm:bg-amber-500 shadow-sm'
+                    ? 'w-5 h-2 bg-purple-600 sm:bg-amber-500 shadow-sm'
                     : 'w-2 h-2 bg-stone-300 hover:bg-stone-400'
                 }`}
                 aria-label={`ไปยังรูปที่ ${i + 1}`}
@@ -216,7 +250,7 @@ export default function SponsorBannerCarousel() {
         {/* Right Arrow Button */}
         <button
           onClick={handleNext}
-          className="p-1.5 rounded-full text-stone-400 hover:text-amber-500 hover:bg-stone-100 transition-all active:scale-95"
+          className="p-1.5 rounded-full text-stone-400 hover:text-amber-600 hover:bg-stone-200/60 transition-all active:scale-90"
           aria-label="ถัดไป"
         >
           <ArrowRight className="h-4 w-4" />
