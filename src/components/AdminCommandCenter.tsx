@@ -483,11 +483,10 @@ export default function AdminCommandCenter() {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="กรอกรหัส PIN (เช่น 1234)"
+                placeholder="••••••••"
                 aria-label="รหัส PIN ผู้บริหาร"
-                className="w-full rounded-2xl border border-stone-300 p-3.5 text-center text-lg font-mono tracking-widest text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50"
+                className="w-full rounded-2xl border border-stone-300 p-3.5 text-center text-lg font-mono tracking-widest text-stone-900 placeholder:text-stone-300 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50"
               />
-              <p className="text-[11px] text-stone-400 mt-1.5">💡 รหัส PIN เริ่มต้นของระบบ: <span className="font-mono font-bold text-amber-700">1234</span></p>
             </div>
 
             {errorPin && (

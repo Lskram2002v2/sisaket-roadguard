@@ -164,14 +164,6 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
                 <span className="text-[11px] sm:text-xs">วิธีใช้งาน</span>
               </button>
             )}
-
-            <Link
-              href="/admin"
-              className="flex items-center gap-1 rounded-xl bg-white/10 px-2.5 py-1.5 text-xs font-medium text-stone-200 backdrop-blur-md hover:bg-white/20 transition-all border border-white/10 active:scale-95 shadow-sm"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-              <span className="text-[11px] sm:text-xs">เจ้าหน้าที่</span>
-            </Link>
           </div>
         </div>
 
