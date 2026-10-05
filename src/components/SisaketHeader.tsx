@@ -7,31 +7,31 @@ import { roadStore } from '@/lib/db-store';
 import { RoadReport, HeaderThemeConfig } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/image-helper';
 
-// แกลเลอรีสถานที่ท่องเที่ยวและแลนด์มาร์กสำคัญของจังหวัดศรีสะเกษ (เริ่มต้น)
+// แกลเลอรีสถานที่ท่องเที่ยวและแลนด์มาร์กสำคัญของจังหวัดศรีสะเกษ
 const SISAKET_LANDMARKS = [
   {
-    title: 'ผามออีแดง & เขาพระวิหาร',
+    title: 'ตลาดโต้รุ่งศรีนครลำดวน',
+    district: 'อ.เมืองศรีสะเกษ',
+    img: 'https://sisakettownmunicipality.go.th/wp-content/uploads/2025/06/%E0%B8%95%E0%B8%A5%E0%B8%B2%E0%B8%94%E0%B9%82%E0%B8%95%E0%B9%89%E0%B8%A3%E0%B8%B8%E0%B9%88%E0%B8%8724-6-68-1-scaled.png',
+    tag: 'สตรีทฟู้ดใจกลางเมือง',
+  },
+  {
+    title: 'ผามออีแดง & อุทยานแห่งชาติเขาพระวิหาร',
     district: 'อ.กันทรลักษ์',
-    img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop&q=80',
+    img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRcZg3ns6HSRI5YBH_8dkrvBPt3puVR_MPmEVmwR95IvQhV-y39F2KRPPrZ&s=10',
     tag: 'แลนด์มาร์กยอดนิยม',
   },
   {
     title: 'ปราสาทหินสระกำแพงใหญ่',
     district: 'อ.อุทุมพรพิสัย',
-    img: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1000&auto=format&fit=crop&q=80',
+    img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ29zYAjBuvbwu-EcRJUE6W6miTQ2W7FOvpOXUv8uCqbewtvd3N0G6pFis&s=10',
     tag: 'ขอมโบราณพันปี',
   },
   {
     title: 'วัดพระธาตุสุพรรณหงส์',
     district: 'อ.เมืองศรีสะเกษ',
-    img: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1000&auto=format&fit=crop&q=80',
+    img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS6KLcoNktH10NP1xIOtB71_BiF4fOLslOV6XfWQCy0Zi9TJ57Lb42DG-CG&s=10',
     tag: 'เรือหงส์กลางน้ำ',
-  },
-  {
-    title: 'สวนสมเด็จพระศรีนครินทร์ (ดงลำดวน)',
-    district: 'อ.เมืองศรีสะเกษ',
-    img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1000&auto=format&fit=crop&q=80',
-    tag: 'ลำดวน 50,000 ต้น',
   },
 ];
 
