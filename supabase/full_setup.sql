@@ -101,8 +101,9 @@ CREATE INDEX IF NOT EXISTS idx_road_reports_geom ON public.road_reports USING GI
 CREATE INDEX IF NOT EXISTS idx_sponsor_banners_order ON public.sponsor_banners("order" ASC);
 CREATE INDEX IF NOT EXISTS idx_sponsor_banners_active ON public.sponsor_banners(is_active);
 
--- 5. VIEWS (PDPA Compliant View)
-CREATE OR REPLACE VIEW public.public_road_reports AS 
+-- 5. VIEWS (PDPA Compliant View with Security Invoker)
+CREATE OR REPLACE VIEW public.public_road_reports
+WITH (security_invoker = true) AS 
 SELECT 
     id,
     tracking_code,
@@ -126,7 +127,8 @@ SELECT
     CONCAT(SUBSTRING(reporter_phone, 1, 3), '-XXX-', SUBSTRING(reporter_phone, 8, 3)) AS masked_phone
 FROM public.road_reports;
 
-CREATE OR REPLACE VIEW public.district_summary_stats AS
+CREATE OR REPLACE VIEW public.district_summary_stats
+WITH (security_invoker = true) AS 
 SELECT 
     district,
     COUNT(*) AS total_reports,
