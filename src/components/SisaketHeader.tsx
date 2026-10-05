@@ -16,22 +16,28 @@ const SISAKET_LANDMARKS = [
     tag: 'สตรีทฟู้ดใจกลางเมือง',
   },
   {
-    title: 'ผามออีแดง & อุทยานแห่งชาติเขาพระวิหาร',
-    district: 'อ.กันทรลักษ์',
+    title: 'ซุ่นเฮงพลาซ่า',
+    district: 'อ.เมืองศรีสะเกษ',
     img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRcZg3ns6HSRI5YBH_8dkrvBPt3puVR_MPmEVmwR95IvQhV-y39F2KRPPrZ&s=10',
-    tag: 'แลนด์มาร์กยอดนิยม',
+    tag: 'ห้างสรรพสินค้าท้องถิ่น',
   },
   {
-    title: 'ปราสาทหินสระกำแพงใหญ่',
-    district: 'อ.อุทุมพรพิสัย',
+    title: 'วัดพระโต (วัดมหาพุทธาราม)',
+    district: 'อ.เมืองศรีสะเกษ',
     img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ29zYAjBuvbwu-EcRJUE6W6miTQ2W7FOvpOXUv8uCqbewtvd3N0G6pFis&s=10',
-    tag: 'ขอมโบราณพันปี',
+    tag: 'หลวงพ่อโต พระคู่บ้านคู่เมือง',
   },
   {
-    title: 'วัดพระธาตุสุพรรณหงส์',
+    title: 'โคปุระจำลองที่เกาะกลางน้ำศรีสะเกษ',
     district: 'อ.เมืองศรีสะเกษ',
     img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS6KLcoNktH10NP1xIOtB71_BiF4fOLslOV6XfWQCy0Zi9TJ57Lb42DG-CG&s=10',
-    tag: 'เรือหงส์กลางน้ำ',
+    tag: 'เกาะห้วยน้ำคำ',
+  },
+  {
+    title: 'ศาลหลักเมืองศรีสะเกษ',
+    district: 'อ.เมืองศรีสะเกษ',
+    img: 'https://cms.dmpcdn.com/travel/2023/08/13/37106830-39b5-11ee-90ca-8f4eb28950d6_webp_original.webp',
+    tag: 'สิ่งศักดิ์สิทธิ์คู่เมือง',
   },
 ];
 
