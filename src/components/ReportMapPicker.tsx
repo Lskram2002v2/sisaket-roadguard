@@ -1,11 +1,38 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { MapPin, Navigation, AlertTriangle, ShieldAlert, Sparkles, Layers } from 'lucide-react';
+import { MapPin, Navigation, AlertTriangle, ShieldAlert, Sparkles, Layers, Search, X } from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
 import { RoadReport } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
+
+// ฐานข้อมูลสถานที่สำคัญและชุมชนใน จ.ศรีสะเกษ สำหรับการค้นหาไว 0ms (Instant Sisaket Places Index)
+const SISAKET_LANDMARKS_INDEX = [
+  { name: 'ศาลากลางจังหวัดศรีสะเกษ', district: 'เมืองศรีสะเกษ', lat: 15.1158, lng: 104.3298 },
+  { name: 'สถานีรถไฟศรีสะเกษ', district: 'เมืองศรีสะเกษ', lat: 15.1197, lng: 104.3276 },
+  { name: 'โรงพยาบาลศรีสะเกษ', district: 'เมืองศรีสะเกษ', lat: 15.1189, lng: 104.3382 },
+  { name: 'มหาวิทยาลัยราชภัฏศรีสะเกษ', district: 'เมืองศรีสะเกษ', lat: 15.0934, lng: 104.3092 },
+  { name: 'สวนสมเด็จพระศรีนครินทร์ (ดงลำดวน)', district: 'เมืองศรีสะเกษ', lat: 15.0967, lng: 104.3245 },
+  { name: 'วัดพระธาตุสุพรรณหงส์', district: 'เมืองศรีสะเกษ', lat: 15.0345, lng: 104.4215 },
+  { name: 'เกาะกลางน้ำศรีสะเกษ / หอคอยศรีลำดวน', district: 'เมืองศรีสะเกษ', lat: 15.1278, lng: 104.3168 },
+  { name: 'ตลาดสดเทศบาล 1 (ตลาดโต้รุ่ง)', district: 'เมืองศรีสะเกษ', lat: 15.1205, lng: 104.3255 },
+  { name: 'สี่แยกส้มป่อย / ถนนขุขันธ์', district: 'เมืองศรีสะเกษ', lat: 15.1105, lng: 104.3225 },
+  { name: 'ถนนราชการรถไฟ', district: 'เมืองศรีสะเกษ', lat: 15.1210, lng: 104.3260 },
+  { name: 'ผามออีแดง (อุทยานแห่งชาติเขาพระวิหาร)', district: 'กันทรลักษ์', lat: 14.3948, lng: 104.7088 },
+  { name: 'ที่ว่าการอำเภอกันทรลักษ์', district: 'กันทรลักษ์', lat: 14.6412, lng: 104.6515 },
+  { name: 'ศาลหลักเมืองกันทรลักษ์', district: 'กันทรลักษ์', lat: 14.6432, lng: 104.6521 },
+  { name: 'ปราสาทหินสระกำแพงใหญ่', district: 'อุทุมพรพิสัย', lat: 15.1012, lng: 104.1298 },
+  { name: 'ที่ว่าการอำเภออุทุมพรพิสัย', district: 'อุทุมพรพิสัย', lat: 15.1120, lng: 104.1425 },
+  { name: 'วัดป่าศรีมงคลรัตนาราม (ถ้ำพญานาค)', district: 'อุทุมพรพิสัย', lat: 15.0685, lng: 104.1685 },
+  { name: 'เขื่อนราษีไศล', district: 'ราษีไศล', lat: 15.3512, lng: 104.1450 },
+  { name: 'ปราสาทปรางค์กู่', district: 'ปรางค์กู่', lat: 14.8562, lng: 103.9875 },
+  { name: 'วัดล้านขวด (วัดป่ามหาเจดีย์แก้ว)', district: 'ขุนหาญ', lat: 14.6225, lng: 104.4172 },
+  { name: 'น้ำตกสำโรงเกียรติ', district: 'ขุนหาญ', lat: 14.5025, lng: 104.4850 },
+  { name: 'ศาลหลักเมืองขุขันธ์', district: 'ขุขันธ์', lat: 14.7145, lng: 104.1970 },
+  { name: 'จุดชมวิวพญากูปรี', district: 'ภูสิงห์', lat: 14.3850, lng: 104.0520 },
+  { name: 'ด่านช่องสะงำ (ชายแดนไทย-กัมพูชา)', district: 'ภูสิงห์', lat: 14.3612, lng: 104.0625 },
+];
 
 interface Props {
   latitude: number;
@@ -27,6 +54,13 @@ export default function ReportMapPicker({
   const [gpsStatusInfo, setGpsStatusInfo] = useState<{ type: 'success' | 'info' | 'warning'; text: string } | null>(null);
   const [nearbyWarning, setNearbyWarning] = useState<string | null>(null);
   const [reports, setReports] = useState<RoadReport[]>([]);
+  
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ name: string; district: string; lat: number; lng: number }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -93,7 +127,7 @@ export default function ReportMapPicker({
       if (!mapInstanceRef.current && mapContainerRef.current) {
         const map = L.map(mapContainerRef.current, {
           center: [latitude || SISAKET_CENTER.lat, longitude || SISAKET_CENTER.lng],
-          zoom: 12,
+          zoom: 13,
           zoomControl: false,
           scrollWheelZoom: false,
         });
@@ -132,15 +166,15 @@ export default function ReportMapPicker({
         const amberIcon = L.divIcon({
           className: 'custom-amber-marker',
           html: `
-            <div style="background-color: #C27803; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 4px 16px rgba(194, 120, 3, 0.7); display: flex; align-items: center; justify-content: center; color: white;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <div style="background-color: #C27803; width: 34px; height: 34px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 4px 16px rgba(194, 120, 3, 0.7); display: flex; align-items: center; justify-content: center; color: white;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                 <circle cx="12" cy="10" r="3"></circle>
               </svg>
             </div>
           `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 32],
+          iconSize: [34, 34],
+          iconAnchor: [17, 34],
         });
 
         const marker = L.marker([latitude, longitude], {
@@ -161,50 +195,6 @@ export default function ReportMapPicker({
 
         mapInstanceRef.current = map;
         markerRef.current = marker;
-
-        // ดึงพิกัด GPS อัตโนมัติทันทีที่เปิดหน้าเว็บแบบ High Accuracy (No Stale Cache)
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const liveLat = pos.coords.latitude;
-              const liveLng = pos.coords.longitude;
-              const accuracy = Math.round(pos.coords.accuracy || 10);
-
-              // วาดรัศมีความแม่นยำ GPS สีฟ้าแบบ Google Maps
-              if (accuracyCircleRef.current) {
-                map.removeLayer(accuracyCircleRef.current);
-              }
-              accuracyCircleRef.current = L.circle([liveLat, liveLng], {
-                radius: accuracy,
-                color: '#2563EB',
-                weight: 1.5,
-                fillColor: '#3B82F6',
-                fillOpacity: 0.15,
-              }).addTo(map);
-
-              if (isWithinSisaket(liveLat, liveLng)) {
-                map.flyTo([liveLat, liveLng], 16, { duration: 1.0 });
-                marker.setLatLng([liveLat, liveLng]);
-                handlePositionUpdate(liveLat, liveLng);
-                const nearest = findNearestDistrict(liveLat, liveLng);
-                setGpsStatusInfo({
-                  type: 'success',
-                  text: `🎯 ล็อกพิกัด GPS แม่นยำ: อ.${nearest.name_th} (ความคลาดเคลื่อน ±${accuracy} ม.)`,
-                });
-              } else {
-                const nearest = findNearestDistrict(liveLat, liveLng);
-                setGpsStatusInfo({
-                  type: 'warning',
-                  text: `📍 ตรวจพบพิกัดของคุณ (${liveLat.toFixed(4)}, ${liveLng.toFixed(4)}) อยู่นอกเขต จ.ศรีสะเกษ (ความแม่นยำ ±${accuracy}ม.) — ระบบตั้งหมุดเริ่มต้นไว้ที่ อ.${nearest.name_th} เพื่อความสะดวกในการทดสอบ`,
-                });
-              }
-            },
-            () => {
-              // หากผู้ใช้ยังไม่ได้อนุญาต GPS ระบบจะให้ปักหมุดเองหรือเลือกอำเภอได้อย่างราบรื่น
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-          );
-        }
       }
     }
 
@@ -273,9 +263,12 @@ export default function ReportMapPicker({
     handlePositionUpdate(target.lat, target.lng);
   };
 
+  /**
+   * ดึงตำแหน่ง GPS สดเมื่อผู้ใช้กดปุ่ม "พิกัดฉัน"
+   */
   const handleGetLiveLocation = async () => {
     if (!navigator.geolocation) {
-      setGeoError('อุปกรณ์ของคุณไม่รองรับการดึงพิกัด GPS');
+      setGeoError('อุปกรณ์หรือเบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด GPS');
       return;
     }
 
@@ -291,51 +284,153 @@ export default function ReportMapPicker({
         const lng = pos.coords.longitude;
         const accuracy = Math.round(pos.coords.accuracy || 10);
 
-        if (mapInstanceRef.current && markerRef.current) {
-          // วาดรัศมีความแม่นยำ GPS สีฟ้า
-          if (accuracyCircleRef.current) {
-            mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
-          }
-          accuracyCircleRef.current = L.circle([lat, lng], {
-            radius: accuracy,
-            color: '#2563EB',
-            weight: 1.5,
-            fillColor: '#3B82F6',
-            fillOpacity: 0.15,
-          }).addTo(mapInstanceRef.current);
-
-          mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
-          markerRef.current.setLatLng([lat, lng]);
-        }
-
-        handlePositionUpdate(lat, lng);
-
-        const nearest = findNearestDistrict(lat, lng);
+        // หากพิกัดอยู่ในศรีสะเกษ
         if (isWithinSisaket(lat, lng)) {
+          if (mapInstanceRef.current && markerRef.current) {
+            if (accuracyCircleRef.current) {
+              mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+            }
+            accuracyCircleRef.current = L.circle([lat, lng], {
+              radius: accuracy,
+              color: '#2563EB',
+              weight: 1.5,
+              fillColor: '#3B82F6',
+              fillOpacity: 0.15,
+            }).addTo(mapInstanceRef.current);
+
+            mapInstanceRef.current.flyTo([lat, lng], 16, { duration: 0.8 });
+            markerRef.current.setLatLng([lat, lng]);
+          }
+
+          handlePositionUpdate(lat, lng);
+          const nearest = findNearestDistrict(lat, lng);
+
           setGpsStatusInfo({
             type: 'success',
-            text: `🎯 ตรวจพบตำแหน่ง GPS ของคุณ: อ.${nearest.name_th} (ความแม่นยำ ±${accuracy} ม.)`,
+            text: `🎯 ล็อกพิกัด GPS แม่นยำ: อ.${nearest.name_th} (ความคลาดเคลื่อน ±${accuracy} ม.)`,
           });
         } else {
+          // หากพิกัดอยู่นอกศรีสะเกษ (เช่น ใช้งานบนคอมพิวเตอร์/Wi-Fi ที่ IP อยู่ กทม. หรือต่างจังหวัด)
           setGpsStatusInfo({
             type: 'warning',
-            text: `📍 พิกัดของคุณ (${lat.toFixed(4)}, ${lng.toFixed(4)}) อยู่นอกเขต จ.ศรีสะเกษ (ความแม่นยำ ±${accuracy}ม.) แนะนำเลือก 22 อำเภอเพื่อทดสอบระบบ`,
+            text: `📶 ตำแหน่งจากเครือข่ายอินเทอร์เน็ต (${lat.toFixed(3)}, ${lng.toFixed(3)}) อยู่นอกพื้นที่ จ.ศรีสะเกษ — ท่านสามารถพิมพ์ค้นหาชื่อสถานที่ หรือเลือก 22 อำเภอเพื่อปักหมุดจุดชำรุดได้ทันที`,
           });
         }
       },
       (err) => {
         setIsLocating(false);
-        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาอนุญาตสิทธิ์ตำแหน่งในเบราว์เซอร์ หรือเลือกอำเภอในรายการด้านบนครับ');
+        setGeoError('ไม่สามารถดึงตำแหน่ง GPS ได้ กรุณาอนุญาตสิทธิ์ตำแหน่งในเบราว์เซอร์ หรือค้นหา/เลือกอำเภอในรายการด้านบนครับ');
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+  };
+
+  /**
+   * ค้นหาสถานที่ / ถนน / ชุมชน ในศรีสะเกษ
+   */
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const q = query.trim().toLowerCase();
+    
+    // 1. ค้นหาในดัชนีสถานที่สำคัญของศรีสะเกษ (Instant 0ms Search)
+    const matchedLocal = SISAKET_LANDMARKS_INDEX.filter(
+      (item) => item.name.toLowerCase().includes(q) || item.district.toLowerCase().includes(q)
+    );
+
+    // 2. ค้นหาใน 22 อำเภอ
+    const matchedDistricts = SISAKET_DISTRICTS.filter(
+      (d) => d.name_th.toLowerCase().includes(q) || d.name_en.toLowerCase().includes(q)
+    ).map((d) => ({
+      name: `อ.${d.name_th} (ศูนย์กลางอำเภอ)`,
+      district: d.name_th,
+      lat: d.lat,
+      lng: d.lng,
+    }));
+
+    const combined = [...matchedLocal, ...matchedDistricts];
+    setSearchResults(combined);
+    setShowDropdown(true);
+  };
+
+  const handleSelectSearchResult = (item: { name: string; district: string; lat: number; lng: number }) => {
+    setSearchQuery(item.name);
+    setShowDropdown(false);
+
+    if (mapInstanceRef.current && markerRef.current) {
+      mapInstanceRef.current.flyTo([item.lat, item.lng], 16, { duration: 0.8 });
+      markerRef.current.setLatLng([item.lat, item.lng]);
+    }
+
+    handlePositionUpdate(item.lat, item.lng);
+    setGpsStatusInfo({
+      type: 'info',
+      text: `📍 ปักหมุดที่: ${item.name} (อ.${item.district}) เรียบร้อยแล้ว`,
+    });
   };
 
   const isOutside = !isWithinSisaket(latitude, longitude);
 
   return (
     <div className="space-y-3">
-      {/* Map Header with Tailwind Styling */}
+      {/* Search Bar for Places, Roads, and Villages in Sisaket */}
+      <div className="relative">
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 h-4 w-4 text-stone-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => {
+              if (searchQuery.trim()) setShowDropdown(true);
+            }}
+            placeholder="🔍 ค้นหาชื่อสถานที่, ถนน, วัด, รพ., ชุมชน ในศรีสะเกษ..."
+            className="w-full rounded-2xl border border-stone-300 pl-10 pr-9 py-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50/80 shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSearchResults([]);
+                setShowDropdown(false);
+              }}
+              className="absolute right-3 rounded-full p-1 text-stone-400 hover:text-stone-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Autocomplete Search Dropdown */}
+        {showDropdown && searchResults.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-2xl border border-stone-200 animate-fadeIn">
+            {searchResults.map((item, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelectSearchResult(item)}
+                className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span className="font-semibold truncate">{item.name}</span>
+                </div>
+                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                  อ.{item.district}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Map Header with District Selector & GPS Button */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-stone-900 min-w-0 truncate">
           <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
