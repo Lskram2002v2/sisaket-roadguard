@@ -1,10 +1,10 @@
 import { RoadReport, ReportStatus, SeverityLevel, SponsorBanner, HeaderThemeConfig } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
-const STORAGE_KEY = 'sisaket_roadguard_reports_v1';
-const MY_REPORTS_KEY = 'sisaket_my_reported_codes_v1';
-const BANNERS_STORAGE_KEY = 'sisaket_roadguard_banners_v1';
-const THEME_STORAGE_KEY = 'sisaket_roadguard_theme_v1';
+const STORAGE_KEY = 'sisaket_roadguard_reports_v2';
+const MY_REPORTS_KEY = 'sisaket_my_reported_codes_v2';
+const BANNERS_STORAGE_KEY = 'sisaket_roadguard_banners_v2';
+const THEME_STORAGE_KEY = 'sisaket_roadguard_theme_v2';
 
 // Default sponsor / public relations banners for Sisaket Province
 const INITIAL_BANNERS: SponsorBanner[] = [
