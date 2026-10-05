@@ -11,6 +11,8 @@ import {
   Search,
   X,
   CheckCircle2,
+  Crosshair,
+  RefreshCw,
 } from 'lucide-react';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict, findNearbyReport, SISAKET_DISTRICTS } from '@/lib/geofence';
 import { SISAKET_GEOJSON, getDistrictGeoJSON } from '@/lib/sisaket-geojson';
@@ -303,7 +305,7 @@ export default function ReportMapPicker({
     setGeoError(null);
     setGpsStatusInfo({
       type: 'info',
-      text: '🛰️ กำลังรับสัญญาณดาวเทียม GPS...',
+      text: '🛰️ กำลังรับสัญญาณดาวเทียม GPS จากมือถือแบบเรียลไทม์...',
     });
 
     if (watchIdRef.current !== null) {
@@ -345,7 +347,7 @@ export default function ReportMapPicker({
       if (isWithinSisaket(lat, lng)) {
         setGpsStatusInfo({
           type: 'success',
-          text: `🎯 ล็อกพิกัดปัจจุบันสำเร็จ: อ.${nearest.name_th} (±${accuracy} ม.)`,
+          text: `🎯 ล็อกพิกัดปัจจุบันสำเร็จ: อ.${nearest.name_th} (${lat.toFixed(5)}, ${lng.toFixed(5)} / แม่นยำ ±${accuracy}ม.)`,
         });
         playAlertChime('success');
       } else {
@@ -367,10 +369,10 @@ export default function ReportMapPicker({
       } else {
         setGpsStatusInfo({
           type: 'warning',
-          text: '💡 แตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่ด้านบนได้ทันที',
+          text: '💡 ท่าที่ 2: ท่านสามารถแตะลากหมุดบนแผนที่ หรือค้นหาชื่อสถานที่/ถนนได้ทันที',
         });
       }
-    }, 5000);
+    }, 5500);
 
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
@@ -475,94 +477,97 @@ export default function ReportMapPicker({
   const isOutside = !isWithinSisaket(latitude, longitude);
 
   return (
-    <div className="space-y-2">
-      {/* 1. Ultra-Compact Control Header (Search + District + Compact GPS Button on 1 Line) */}
-      <div className="flex items-center gap-1.5">
-        {/* Search Input Box */}
-        <div className="relative flex-1 min-w-0">
-          <div className="relative flex items-center">
-            <Search className="absolute left-2.5 h-3.5 w-3.5 text-stone-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => {
-                if (searchQuery.trim()) setShowDropdown(true);
-              }}
-              placeholder="🔍 ค้นหาถนน/สถานที่..."
-              className="w-full rounded-xl border border-stone-300 pl-8 pr-7 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-stone-50/90 shadow-sm"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setShowDropdown(false);
-                }}
-                className="absolute right-2 rounded-full p-0.5 text-stone-400 hover:text-stone-700"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Autocomplete Dropdown */}
-          {showDropdown && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-xl bg-white p-1 shadow-xl border border-stone-200 animate-fadeIn">
-              {searchResults.map((item, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectSearchResult(item)}
-                  className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <MapPin className="h-3 w-3 text-amber-600 shrink-0" />
-                    <span className="font-semibold truncate">{item.name}</span>
-                  </div>
-                  <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.2 rounded-full shrink-0 ml-1.5">
-                    อ.{item.district}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 22 Districts Dropdown (Compact) */}
-        <div className="shrink-0">
+    <div className="space-y-2.5">
+      {/* 1. Header Bar: District & Primary GPS Button */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-xs sm:text-sm font-bold text-stone-900 truncate">
+            จุดชำรุด
+          </span>
           <select
             value={district}
             onChange={(e) => handleDistrictJump(e.target.value)}
             aria-label="เลือกอำเภอ"
-            className="rounded-xl border border-purple-300 bg-purple-50/90 px-2 py-1.5 text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+            className="rounded-xl border border-purple-300 bg-purple-50/90 px-2 py-1 text-[11px] sm:text-xs font-bold text-purple-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
           >
             {SISAKET_DISTRICTS.map((d) => (
               <option key={d.id} value={d.name_th}>
-                อ.{d.name_th}
+                🟣 อ.{d.name_th}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Compact 1-Tap Mobile GPS Trigger Button (ปุ่มเล็กประหยัดพื้นที่) */}
+        {/* Primary Action Button: Dedicated 1-Tap Mobile GPS */}
         <button
           type="button"
           onClick={() => triggerAutoGpsLock()}
           disabled={isLocating}
-          className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 px-2.5 py-1.5 text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95 shrink-0"
-          title="ดึงพิกัดปัจจุบันจาก GPS มือถือ"
+          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 px-3 py-1.5 text-xs font-bold text-stone-950 shadow-sm transition-all active:scale-95 shrink-0"
+          title="ดึงพิกัดตำแหน่งปัจจุบันจาก GPS มือถือ"
         >
           <Navigation className={`h-3.5 w-3.5 ${isLocating ? 'animate-spin text-stone-950' : 'text-stone-950'}`} />
-          <span>{isLocating ? 'ดึง GPS...' : 'GPS ฉัน'}</span>
+          <span>{isLocating ? 'กำลังค้นหา GPS...' : '📍 ดึงพิกัด GPS มือถือ'}</span>
         </button>
       </div>
 
-      {/* 2. Compact Live Status Bar */}
+      {/* 2. Search Input Box */}
+      <div className="relative">
+        <div className="relative flex items-center">
+          <Search className="absolute left-3 h-3.5 w-3.5 text-stone-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => {
+              if (searchQuery.trim()) setShowDropdown(true);
+            }}
+            placeholder="🔍 หรือพิมพ์ค้นหาถนน, วัด, โรงพยาบาล, ชุมชน ในศรีสะเกษ..."
+            className="w-full rounded-xl border border-stone-300 pl-9 pr-8 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-stone-50/90 shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSearchResults([]);
+                setShowDropdown(false);
+              }}
+              className="absolute right-2.5 rounded-full p-0.5 text-stone-400 hover:text-stone-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Autocomplete Dropdown */}
+        {showDropdown && searchResults.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-xl bg-white p-1 shadow-xl border border-stone-200 animate-fadeIn">
+            {searchResults.map((item, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelectSearchResult(item)}
+                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-amber-50 text-stone-800 transition-colors"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span className="font-semibold truncate">{item.name}</span>
+                </div>
+                <span className="text-[10px] text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded-full shrink-0 ml-1.5">
+                  อ.{item.district}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Live GPS Status / Feedback Alert Banner */}
       {gpsStatusInfo && (
         <div
-          className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[11px] animate-fadeIn shadow-xs border ${
+          className={`flex items-start gap-2 rounded-xl p-2 text-xs animate-fadeIn shadow-xs border ${
             gpsStatusInfo.type === 'success'
               ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
               : gpsStatusInfo.type === 'warning'
@@ -570,70 +575,81 @@ export default function ReportMapPicker({
               : 'bg-blue-50 border-blue-300 text-blue-900'
           }`}
         >
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-          <span className="font-medium truncate">{gpsStatusInfo.text}</span>
+          <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+          <span className="font-medium leading-relaxed">{gpsStatusInfo.text}</span>
         </div>
       )}
 
       {/* Geo Error / GPS Blocked Guide */}
       {geoError && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 px-2.5 py-1 text-[11px] text-rose-800 shadow-xs animate-fadeIn">
-          <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-          <span className="truncate">{geoError}</span>
+        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 p-2 text-xs text-rose-800 shadow-xs animate-fadeIn">
+          <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
+          <span className="leading-tight">{geoError}</span>
         </div>
       )}
 
       {/* Proximity Warning */}
       {nearbyWarning && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 px-2.5 py-1 text-[11px] text-amber-950 animate-fadeIn">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-          <span className="truncate">{nearbyWarning}</span>
+        <div className="flex items-center gap-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 p-2 text-xs text-amber-950 animate-fadeIn">
+          <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" />
+          <span className="leading-tight">{nearbyWarning}</span>
         </div>
       )}
 
       {isOutside && !gpsStatusInfo && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 px-2.5 py-1 text-[11px] text-rose-900">
-          <ShieldAlert className="h-3.5 w-3.5 text-rose-700 shrink-0" />
+        <div className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-300 p-2 text-xs text-rose-900">
+          <ShieldAlert className="h-4 w-4 text-rose-700 shrink-0" />
           <span>พิกัดอยู่นอกเขต 22 อำเภอ จ.ศรีสะเกษ</span>
         </div>
       )}
 
-      {/* 3. Interactive Leaflet Map Container (Compact Height: h-60 to h-64) */}
-      <div className="relative overflow-hidden rounded-2xl border-2 border-purple-200/80 shadow-md bg-stone-100 h-60 sm:h-64 w-full">
+      {/* 4. Interactive Leaflet Map Container */}
+      <div className="relative overflow-hidden rounded-2xl border-2 border-purple-200/80 shadow-md bg-stone-100 h-64 sm:h-72 w-full">
         <div ref={mapContainerRef} className="h-full w-full z-0" />
 
         {/* Real District Purple Boundary Badge Overlay */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-lg bg-purple-950/90 text-purple-100 px-2 py-0.5 text-[10px] sm:text-[11px] font-bold shadow-md backdrop-blur-md border border-purple-400/60 max-w-[85%] truncate animate-fadeIn">
-          <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-ping shrink-0" />
-          <span className="truncate">อ.{district || 'เมืองศรีสะเกษ'}</span>
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-lg bg-purple-950/90 text-purple-100 px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur-md border border-purple-400/60 max-w-[85%] truncate animate-fadeIn">
+          <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping shrink-0" />
+          <span className="truncate">🟣 เส้นเขตจริง: อ.{district || 'เมืองศรีสะเกษ'}</span>
         </div>
 
+        {/* Floating Quick GPS Crosshair FAB on Map Corner (Native Mobile Maps Feel) */}
+        <button
+          type="button"
+          onClick={() => triggerAutoGpsLock()}
+          disabled={isLocating}
+          className="absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-stone-800 shadow-lg border border-stone-300 hover:bg-amber-50 hover:text-amber-700 active:scale-90 transition-all backdrop-blur-sm"
+          title="ดึงพิกัดตำแหน่งปัจจุบันจาก GPS มือถือ"
+        >
+          <Crosshair className={`h-5 w-5 ${isLocating ? 'animate-spin text-amber-600' : 'text-amber-600'}`} />
+        </button>
+
         {/* Floating Pin Helper Badge */}
-        <div className="absolute bottom-2 left-2 z-10 rounded-md bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-stone-700 shadow-xs border border-stone-200/80 backdrop-blur-xs">
-          💡 แตะหรือลากหมุดสีทองเพื่อปรับจุด
+        <div className="absolute bottom-2 left-2 z-10 rounded-md bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-stone-700 shadow-xs border border-stone-200/80 backdrop-blur-xs">
+          💡 ท่าที่ 2: แตะแผนที่หรือลากหมุดสีทองเพื่อปรับจุดชำรุด
         </div>
       </div>
 
-      {/* 4. Streamlined Coordinates & District Live Status Capsule */}
-      <div className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-purple-50/80 to-amber-50/80 px-3 py-1.5 text-xs border border-purple-200/80 shadow-xs">
+      {/* 5. Streamlined Coordinates & District Live Status Capsule */}
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-purple-50/80 to-amber-50/80 px-3 py-2 text-xs border border-purple-200/80 shadow-xs">
         <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
           <Layers className="h-3.5 w-3.5 text-purple-700 shrink-0" />
           <span className="text-purple-900 font-bold truncate">อ.{district || 'เมืองศรีสะเกษ'}</span>
           <span className="text-stone-300">•</span>
-          <span className="font-mono text-stone-700 truncate">
+          <span className="font-mono text-stone-700 font-semibold truncate">
             {latitude.toFixed(5)}, {longitude.toFixed(5)}
           </span>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0 text-[10px]">
+        <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
           {gpsAccuracyMeters && (
-            <span className="text-blue-800 bg-blue-100 font-bold px-1.5 py-0.5 rounded-md border border-blue-200">
+            <span className="text-blue-800 bg-blue-100 font-bold px-2 py-0.5 rounded-full border border-blue-200">
               ±{gpsAccuracyMeters}ม.
             </span>
           )}
-          <span className="text-emerald-800 bg-emerald-100 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-0.5">
+          <span className="text-emerald-800 bg-emerald-100 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
             <CheckCircle2 className="h-3 w-3 text-emerald-700" />
-            <span>พร้อมส่ง</span>
+            <span>พร้อมส่งพิกัด</span>
           </span>
         </div>
       </div>
