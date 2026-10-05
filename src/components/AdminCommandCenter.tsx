@@ -375,21 +375,72 @@ export default function AdminCommandCenter() {
     renderMarkers();
   }, [filtered]);
 
-  const handleStatusChange = async (newStatus: ReportStatus) => {
-    if (!activeReport) return;
-    setIsUpdating(true);
-    await roadStore.updateReportStatus(
-      activeReport.id,
-      newStatus,
-      adminNote || activeReport.admin_notes,
-      resolutionUrl || activeReport.resolution_photo_url,
-      assignedTeam || activeReport.assigned_team
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+
+  const handleStatusChange = async (newStatus: ReportStatus, targetRep?: RoadReport) => {
+    const target = targetRep || activeReport;
+    if (!target) return;
+
+    setUpdatingReportId(target.id);
+    setActiveReport(target);
+
+    // Determine notes, team, and resolution url
+    const currentNotes =
+      activeReport?.id === target.id && adminNote
+        ? adminNote
+        : target.admin_notes || (newStatus === 'VERIFIED' ? 'รับเรื่องแล้ว ประสานงานทีมช่างลงสำรวจพื้นที่' : '');
+    const currentTeam =
+      activeReport?.id === target.id && assignedTeam
+        ? assignedTeam
+        : target.assigned_team || '';
+    const currentResUrl =
+      activeReport?.id === target.id && resolutionUrl
+        ? resolutionUrl
+        : target.resolution_photo_url || '';
+
+    // ⚡ Optimistic UI update: immediately update local reports state so button/tag changes instantly
+    setReports((prev) =>
+      prev.map((r) =>
+        r.id === target.id || r.tracking_code === target.tracking_code
+          ? {
+              ...r,
+              status: newStatus,
+              admin_notes: currentNotes,
+              assigned_team: currentTeam,
+              resolution_photo_url: currentResUrl,
+              resolved_at: newStatus === 'RESOLVED' ? new Date().toISOString() : r.resolved_at,
+              updated_at: new Date().toISOString(),
+            }
+          : r
+      )
     );
-    await loadData();
-    const updated = (await roadStore.getAllReports()).find((r) => r.id === activeReport.id);
-    setActiveReport(updated || null);
-    setIsUpdating(false);
-    playAlertChime('success');
+
+    try {
+      await roadStore.updateReportStatus(
+        target.id,
+        newStatus,
+        currentNotes,
+        currentResUrl,
+        currentTeam
+      );
+
+      await loadData();
+      const freshAll = await roadStore.getAllReports();
+      const updated = freshAll.find(
+        (r) => r.id === target.id || r.tracking_code === target.tracking_code
+      );
+      if (updated) {
+        setActiveReport(updated);
+        setAdminNote(updated.admin_notes || '');
+        setAssignedTeam(updated.assigned_team || '');
+        setResolutionUrl(updated.resolution_photo_url || '');
+      }
+      playAlertChime('success');
+    } catch (err) {
+      console.error('Error updating status:', err);
+    } finally {
+      setUpdatingReportId(null);
+    }
   };
 
   const handleOpenEditModal = (rep: RoadReport, e?: React.MouseEvent) => {
@@ -1329,45 +1380,51 @@ export default function AdminCommandCenter() {
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            setActiveReport(rep);
-                            handleStatusChange('VERIFIED');
+                          disabled={updatingReportId === rep.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStatusChange('VERIFIED', rep);
                           }}
-                          className={`rounded-xl px-2.5 py-1 text-xs font-bold transition-all ${
+                          className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold transition-all active:scale-95 ${
                             rep.status === 'VERIFIED'
-                              ? 'bg-blue-600 text-white shadow-sm'
+                              ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/50'
                               : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                          }`}
+                          } ${updatingReportId === rep.id ? 'opacity-75 cursor-wait' : ''}`}
                         >
-                          รับเรื่อง
+                          {updatingReportId === rep.id && <RefreshCw className="h-3 w-3 animate-spin" />}
+                          <span>รับเรื่อง</span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setActiveReport(rep);
-                            handleStatusChange('IN_PROGRESS');
+                          disabled={updatingReportId === rep.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStatusChange('IN_PROGRESS', rep);
                           }}
-                          className={`rounded-xl px-2.5 py-1 text-xs font-bold transition-all ${
+                          className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold transition-all active:scale-95 ${
                             rep.status === 'IN_PROGRESS'
-                              ? 'bg-amber-600 text-white shadow-sm'
+                              ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400/50'
                               : 'bg-amber-50 text-amber-900 hover:bg-amber-100'
-                          }`}
+                          } ${updatingReportId === rep.id ? 'opacity-75 cursor-wait' : ''}`}
                         >
-                          กำลังซ่อม
+                          {updatingReportId === rep.id && <RefreshCw className="h-3 w-3 animate-spin" />}
+                          <span>กำลังซ่อม</span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setActiveReport(rep);
-                            handleStatusChange('RESOLVED');
+                          disabled={updatingReportId === rep.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStatusChange('RESOLVED', rep);
                           }}
-                          className={`rounded-xl px-2.5 py-1 text-xs font-bold transition-all ${
+                          className={`flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold transition-all active:scale-95 ${
                             rep.status === 'RESOLVED'
-                              ? 'bg-emerald-600 text-white shadow-sm'
+                              ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400/50'
                               : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
-                          }`}
+                          } ${updatingReportId === rep.id ? 'opacity-75 cursor-wait' : ''}`}
                         >
-                          เสร็จสิ้น ✨
+                          {updatingReportId === rep.id && <RefreshCw className="h-3 w-3 animate-spin" />}
+                          <span>เสร็จสิ้น ✨</span>
                         </button>
                       </div>
                     </div>
@@ -1385,24 +1442,26 @@ export default function AdminCommandCenter() {
                             value={assignedTeam}
                             onChange={(e) => setAssignedTeam(e.target.value)}
                             placeholder="ระบุทีมช่าง เช่น หมวดทางหลวงกันทรลักษ์"
-                            className="rounded-xl border border-purple-200 px-3 py-1.5 text-xs text-stone-900 bg-white"
+                            className="rounded-xl border border-purple-200 px-3 py-1.5 text-xs text-stone-900 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
                           />
                           <input
                             type="text"
                             value={adminNote}
                             onChange={(e) => setAdminNote(e.target.value)}
                             placeholder="บันทึกข้อความถึงประชาชน เช่น เข้าเทยางมะตอยพรุ่งนี้"
-                            className="rounded-xl border border-purple-200 px-3 py-1.5 text-xs text-stone-900 bg-white"
+                            className="rounded-xl border border-purple-200 px-3 py-1.5 text-xs text-stone-900 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
                           />
                         </div>
 
                         <div className="flex justify-end gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={() => handleStatusChange(rep.status)}
-                            className="rounded-xl bg-purple-700 hover:bg-purple-800 px-3 py-1 text-xs font-bold text-white shadow-sm"
+                            disabled={updatingReportId === rep.id}
+                            onClick={() => handleStatusChange(rep.status, rep)}
+                            className="rounded-xl bg-purple-700 hover:bg-purple-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
                           >
-                            บันทึกข้อมูล
+                            {updatingReportId === rep.id && <RefreshCw className="h-3 w-3 animate-spin" />}
+                            <span>บันทึกข้อมูล</span>
                           </button>
                         </div>
                       </div>

@@ -449,34 +449,38 @@ class RoadReportStore {
     resolutionPhotoUrl?: string,
     assignedTeam?: string
   ): Promise<boolean> {
-    const target = this.reports.find(
+    let target = this.reports.find(
       (r) => r.id === idOrCode || r.tracking_code.toUpperCase() === idOrCode.toUpperCase()
     );
 
-    if (!target) return false;
+    const nowIso = new Date().toISOString();
 
-    target.status = status;
-    target.updated_at = new Date().toISOString();
-    if (adminNotes !== undefined) target.admin_notes = adminNotes;
-    if (assignedTeam !== undefined) target.assigned_team = assignedTeam;
-    if (resolutionPhotoUrl) target.resolution_photo_url = resolutionPhotoUrl;
-    if (status === 'RESOLVED') target.resolved_at = new Date().toISOString();
-
-    this.save();
+    if (target) {
+      target.status = status;
+      target.updated_at = nowIso;
+      if (adminNotes !== undefined) target.admin_notes = adminNotes;
+      if (assignedTeam !== undefined) target.assigned_team = assignedTeam;
+      if (resolutionPhotoUrl) target.resolution_photo_url = resolutionPhotoUrl;
+      if (status === 'RESOLVED') target.resolved_at = nowIso;
+      this.save(true);
+      this.notifyListeners();
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const updatePayload: any = {
+          status,
+          updated_at: nowIso,
+        };
+        if (adminNotes !== undefined) updatePayload.admin_notes = adminNotes;
+        if (assignedTeam !== undefined) updatePayload.assigned_team = assignedTeam;
+        if (resolutionPhotoUrl) updatePayload.resolution_photo_url = resolutionPhotoUrl;
+        if (status === 'RESOLVED') updatePayload.resolved_at = nowIso;
+
         await supabase
           .from('road_reports')
-          .update({
-            status,
-            admin_notes: target.admin_notes,
-            resolution_photo_url: target.resolution_photo_url,
-            assigned_team: target.assigned_team,
-            resolved_at: target.resolved_at,
-            updated_at: target.updated_at,
-          })
-          .eq('tracking_code', target.tracking_code);
+          .update(updatePayload)
+          .or(`id.eq.${idOrCode},tracking_code.eq.${idOrCode}`);
       } catch (err) {
         console.warn('Supabase update failed:', err);
       }
