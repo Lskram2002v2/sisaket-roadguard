@@ -192,6 +192,11 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
     setIsTourActive(false);
     setShowWelcomeModal(false);
     localStorage.setItem('sisaket_onboarding_welcomed', 'true');
+    // Return to the first tab (Report) and scroll to top
+    onSwitchTab('report');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleNextStep = () => {
@@ -201,6 +206,11 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
       setIsTourActive(false);
       localStorage.setItem('sisaket_onboarding_welcomed', 'true');
       setIsChecklistOpen(true);
+      // Return to the first tab (Report) and scroll to top!
+      onSwitchTab('report');
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 
@@ -303,35 +313,35 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
         </div>
       )}
 
-      {/* 2. Interactive Guided Tour (Spotlight Overlay & Coach Mark Tooltip) */}
+      {/* 2. Interactive Guided Tour (Crystal-Clear Cutout Spotlight & Coach Mark Tooltip) */}
       {isTourActive && step && (
         <div className="fixed inset-0 z-[9998] pointer-events-auto">
-          {/* Dark Backdrop */}
-          <div className="absolute inset-0 bg-stone-950/75 backdrop-blur-[2px] transition-all duration-300" />
-
-          {/* Spotlight Cutout Glow around target element */}
-          {targetRect && (
+          {/* Crystal-Clear Spotlight with Giant Box-Shadow (No blur on highlighted target!) */}
+          {targetRect ? (
             <div
-              className="absolute rounded-2xl ring-4 ring-amber-400 shadow-[0_0_40px_rgba(245,158,11,0.6)] pointer-events-none transition-all duration-300 ease-out z-10"
+              className="fixed rounded-2xl ring-4 ring-amber-400 shadow-[0_0_35px_rgba(245,158,11,0.7)] pointer-events-none transition-all duration-300 ease-out z-[9998]"
               style={{
-                top: `${targetRect.top + window.scrollY - 6}px`,
-                left: `${targetRect.left + window.scrollX - 6}px`,
+                top: `${Math.max(4, targetRect.top - 6)}px`,
+                left: `${Math.max(4, targetRect.left - 6)}px`,
                 width: `${targetRect.width + 12}px`,
                 height: `${targetRect.height + 12}px`,
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                boxShadow: '0 0 0 9999px rgba(12, 10, 9, 0.78)',
+                backgroundColor: 'transparent',
               }}
             />
+          ) : (
+            <div className="fixed inset-0 bg-stone-950/78 backdrop-blur-[1px] transition-all duration-300 z-[9998]" />
           )}
 
           {/* Coach Mark / Tooltip Dialog */}
           <div
-            className="fixed z-20 left-1/2 -translate-x-1/2 w-[92%] max-w-sm rounded-3xl bg-white p-5 shadow-2xl border-2 border-amber-300 text-stone-900 space-y-3.5 animate-fadeIn"
+            className="fixed z-[9999] left-1/2 -translate-x-1/2 w-[92%] max-w-sm rounded-3xl bg-white p-5 shadow-2xl border-2 border-amber-300 text-stone-900 space-y-3.5 animate-fadeIn"
             style={{
               top: targetRect
                 ? step.position === 'top'
-                  ? Math.max(20, targetRect.top - 230)
-                  : Math.min(window.innerHeight - 250, targetRect.bottom + 20)
-                : '30%',
+                  ? Math.max(16, targetRect.top - 240)
+                  : Math.min(window.innerHeight - 260, targetRect.bottom + 16)
+                : '25%',
             }}
           >
             {/* Header with Step indicator */}
