@@ -7,7 +7,7 @@ const BANNERS_STORAGE_KEY = 'sisaket_roadguard_banners_v2';
 const THEME_STORAGE_KEY = 'sisaket_roadguard_theme_v2';
 
 // Default sponsor / public relations banners for Sisaket Province
-const INITIAL_BANNERS: SponsorBanner[] = [
+export const INITIAL_BANNERS: SponsorBanner[] = [
   {
     id: 'ban-001',
     title: 'ป้ายประชาสัมพันธ์ 1',
@@ -168,9 +168,16 @@ class RoadReportStore {
       const storedBanners = localStorage.getItem(BANNERS_STORAGE_KEY);
       if (storedBanners) {
         try {
-          this.banners = JSON.parse(storedBanners);
+          const parsed = JSON.parse(storedBanners);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.banners = parsed;
+          } else {
+            this.banners = [...INITIAL_BANNERS];
+            this.saveBanners();
+          }
         } catch {
           this.banners = [...INITIAL_BANNERS];
+          this.saveBanners();
         }
       } else {
         this.banners = [...INITIAL_BANNERS];

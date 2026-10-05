@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { SponsorBanner } from '@/lib/types';
-import { roadStore } from '@/lib/db-store';
+import { INITIAL_BANNERS, roadStore } from '@/lib/db-store';
 import { normalizeImageUrl, getGoogleDriveThumbnailUrl, FALLBACK_BANNER_IMAGE } from '@/lib/image-helper';
 import { ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react';
 
 export default function SponsorBannerCarousel() {
-  const [banners, setBanners] = useState<SponsorBanner[]>([]);
+  const [banners, setBanners] = useState<SponsorBanner[]>(INITIAL_BANNERS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -17,7 +17,11 @@ export default function SponsorBannerCarousel() {
     const loadBanners = async () => {
       const all = await roadStore.getAllBanners();
       const active = all.filter((b) => b.is_active);
-      setBanners(active);
+      if (active.length > 0) {
+        setBanners(active);
+      } else {
+        setBanners(INITIAL_BANNERS);
+      }
     };
 
     loadBanners();
