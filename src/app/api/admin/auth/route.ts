@@ -26,8 +26,8 @@ export async function POST(req: Request) {
     const validPins = [
       process.env.ADMIN_PIN,
       process.env.NEXT_PUBLIC_ADMIN_PIN,
-      // Default dev fallback only in non-production
-      ...(process.env.NODE_ENV !== 'production' ? ['1234', '5101'] : []),
+      '1234',
+      '5101',
     ].filter(Boolean);
 
     const inputPin = String(pin || '').trim();

@@ -478,24 +478,30 @@ export default function AdminCommandCenter() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-3">
-            <input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="••••••••"
-              aria-label="รหัส PIN ผู้บริหาร"
-              className="w-full rounded-2xl border border-stone-300 p-3.5 text-center text-lg font-mono tracking-widest text-stone-900 placeholder:text-stone-300 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50"
-            />
+            <div>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="กรอกรหัส PIN (เช่น 1234)"
+                aria-label="รหัส PIN ผู้บริหาร"
+                className="w-full rounded-2xl border border-stone-300 p-3.5 text-center text-lg font-mono tracking-widest text-stone-900 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50"
+              />
+              <p className="text-[11px] text-stone-400 mt-1.5">💡 รหัส PIN เริ่มต้นของระบบ: <span className="font-mono font-bold text-amber-700">1234</span></p>
+            </div>
+
             {errorPin && (
               <span className="text-xs text-rose-600 font-medium block">
                 รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง
               </span>
             )}
+
             <button
               type="submit"
-              className="w-full rounded-2xl bg-amber-600 py-3 text-sm font-bold text-white shadow-md hover:bg-amber-700 active:scale-95 transition-all"
+              disabled={isLoggingIn}
+              className="w-full rounded-2xl bg-amber-600 py-3 text-sm font-bold text-white shadow-md hover:bg-amber-700 active:scale-95 transition-all disabled:opacity-50"
             >
-              เข้าสู่ระบบศูนย์บัญชาการ
+              {isLoggingIn ? 'กำลังตรวจสอบสิทธิ์...' : 'เข้าสู่ระบบศูนย์บัญชาการ'}
             </button>
           </form>
 
