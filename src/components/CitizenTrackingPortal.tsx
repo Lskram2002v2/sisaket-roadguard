@@ -21,8 +21,10 @@ export default function CitizenTrackingPortal({ initialCode }: Props) {
   const [activeTab, setActiveTab] = useState<'my_wallet' | 'community' | 'search'>('my_wallet');
   const [communityDistrict, setCommunityDistrict] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     // 1. โหลดข้อมูลแคชทันที 0ms
     syncData(roadStore.getReportsInstant());
     

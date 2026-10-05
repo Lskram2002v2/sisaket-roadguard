@@ -98,8 +98,11 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
   });
   const [isChecklistCompleted, setIsChecklistCompleted] = useState(false);
 
+  const [mounted, setMounted] = useState(false);
+
   // Initialize on mount
   useEffect(() => {
+    setMounted(true);
     if (typeof window === 'undefined') return;
 
     const hasWelcomed = localStorage.getItem('sisaket_onboarding_welcomed');
@@ -206,6 +209,8 @@ export default function UserOnboardingTour({ activeTab, onSwitchTab }: UserOnboa
       setCurrentStepIdx((prev) => prev - 1);
     }
   };
+
+  if (!mounted) return null;
 
   const step = TOUR_STEPS[currentStepIdx];
 

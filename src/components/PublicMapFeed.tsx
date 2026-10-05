@@ -12,15 +12,17 @@ export default function PublicMapFeed() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
   const [activeReport, setActiveReport] = useState<RoadReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersGroupRef = useRef<any>(null);
   const activeDistrictLayerRef = useRef<any>(null);
 
   useEffect(() => {
+    setMounted(true);
     // 1. โหลดข้อมูลแคชทันที 0ms
     setReports(roadStore.getReportsInstant());
-
+    
     // 2. ซิงค์สดจาก Supabase
     loadData();
 
