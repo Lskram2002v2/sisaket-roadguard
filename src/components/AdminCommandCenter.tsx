@@ -35,6 +35,7 @@ import {
   VolumeX,
   Radio,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { RoadReport, ReportStatus, SeverityLevel } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
@@ -148,6 +149,7 @@ export default function AdminCommandCenter() {
   };
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -156,6 +158,10 @@ export default function AdminCommandCenter() {
       if (savedToken) {
         setAdminToken(savedToken);
         setIsAuthenticated(true);
+        roadStore.refreshFromSupabase(true).then((fresh) => {
+          setReports(fresh);
+          knownReportIdsRef.current = new Set(fresh.map((r) => r.id));
+        });
       }
     }
   }, []);
@@ -177,12 +183,19 @@ export default function AdminCommandCenter() {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('sisaket_admin_token', data.token);
         }
+        // Force fresh load from database immediately upon successful login
+        const fresh = await roadStore.refreshFromSupabase(true);
+        setReports(fresh);
+        knownReportIdsRef.current = new Set(fresh.map((r) => r.id));
       } else {
         setErrorPin(true);
       }
     } catch {
-      if (pin === '1234' || pin === '5101') {
+      if (pin.trim() === '5101') {
         setIsAuthenticated(true);
+        const fresh = await roadStore.refreshFromSupabase(true);
+        setReports(fresh);
+        knownReportIdsRef.current = new Set(fresh.map((r) => r.id));
       } else {
         setErrorPin(true);
       }
@@ -739,6 +752,25 @@ export default function AdminCommandCenter() {
               </div>
             )}
           </div>
+
+          {/* Manual Refresh & Sync Button */}
+          <button
+            onClick={async () => {
+              setIsRefreshing(true);
+              try {
+                const fresh = await roadStore.refreshFromSupabase(true);
+                setReports(fresh);
+                knownReportIdsRef.current = new Set(fresh.map((r) => r.id));
+              } finally {
+                setIsRefreshing(false);
+              }
+            }}
+            disabled={isRefreshing}
+            className="relative flex items-center justify-center rounded-xl bg-white/10 p-2 text-stone-200 hover:bg-white/20 hover:text-amber-400 transition-all border border-white/10 active:scale-95 disabled:opacity-50"
+            title="กดเพื่อซิงค์ดึงข้อมูลรายงานล่าสุดจาก Supabase"
+          >
+            <RefreshCw className={`h-4 w-4 text-amber-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
 
           {/* Settings Modal Trigger (Small Gear Icon ⚙️ next to Bell) */}
           <button

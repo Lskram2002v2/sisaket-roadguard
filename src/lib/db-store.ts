@@ -168,11 +168,10 @@ class RoadReportStore {
         try {
           this.reports = JSON.parse(stored);
         } catch {
-          this.reports = [...INITIAL_REPORTS];
+          this.reports = [];
         }
       } else {
-        this.reports = [...INITIAL_REPORTS];
-        this.save(false);
+        this.reports = [];
       }
 
       const storedBanners = localStorage.getItem(BANNERS_STORAGE_KEY);
@@ -204,6 +203,30 @@ class RoadReportStore {
       } else {
         this.theme = { ...INITIAL_THEME };
         this.saveTheme(false);
+      }
+
+      // Initial Live Sync from Supabase
+      this.refreshFromSupabase(true).catch(() => {});
+      this.refreshBannersFromSupabase().catch(() => {});
+      this.refreshThemeFromSupabase().catch(() => {});
+
+      // Connect Supabase Realtime WebSocket for live 0ms updates across devices
+      if (isSupabaseConfigured && supabase) {
+        try {
+          supabase
+            .channel('realtime_road_reports_global')
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'road_reports' },
+              async () => {
+                await this.refreshFromSupabase(true);
+                this.notifyListeners();
+              }
+            )
+            .subscribe();
+        } catch (err) {
+          console.warn('Realtime channel subscription error:', err);
+        }
       }
     } else {
       this.reports = [...INITIAL_REPORTS];
@@ -282,9 +305,9 @@ class RoadReportStore {
     return this.refreshFromSupabase();
   }
 
-  public async refreshFromSupabase(): Promise<RoadReport[]> {
-    // If a request is already in-flight, return the same promise to prevent duplicate API requests
-    if (this.inFlightReportsPromise) {
+  public async refreshFromSupabase(forceFresh: boolean = false): Promise<RoadReport[]> {
+    // If a request is already in-flight and not forceFresh, return the same promise to prevent duplicate API requests
+    if (!forceFresh && this.inFlightReportsPromise) {
       return this.inFlightReportsPromise;
     }
 
