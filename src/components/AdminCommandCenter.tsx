@@ -36,6 +36,9 @@ import {
   Radio,
   X,
   RefreshCw,
+  LogOut,
+  Upload,
+  Camera,
 } from 'lucide-react';
 import { RoadReport, ReportStatus, SeverityLevel } from '@/lib/types';
 import { roadStore } from '@/lib/db-store';
@@ -87,6 +90,58 @@ export default function AdminCommandCenter() {
   const [editSeverity, setEditSeverity] = useState<SeverityLevel>('MEDIUM');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Resolution Photo Upload State
+  const resolutionFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingResolution, setIsUploadingResolution] = useState(false);
+
+  const handleResolutionPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพ (JPG, PNG, WEBP) เท่านั้น');
+      return;
+    }
+
+    setIsUploadingResolution(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1280;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/webp', 0.85);
+          setResolutionUrl(dataUrl);
+        }
+        setIsUploadingResolution(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -854,6 +909,16 @@ export default function AdminCommandCenter() {
             <Download className="h-3.5 w-3.5" />
             <span>Export CSV</span>
           </button>
+
+          {/* Admin Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1 rounded-xl bg-rose-600/85 hover:bg-rose-600 px-3 py-1.5 text-xs font-bold text-white active:scale-95 transition-all shadow-sm border border-rose-500/40"
+            title="ออกจากระบบศูนย์บัญชาการ"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">ออกจากระบบ</span>
+          </button>
         </div>
       </div>
 
@@ -1276,7 +1341,16 @@ export default function AdminCommandCenter() {
               return (
                 <div
                   key={rep.id}
-                  className={`rounded-3xl bg-white p-4 shadow-sm border transition-all ${
+                  onClick={() => {
+                    if (activeReport?.id !== rep.id) {
+                      setActiveReport(rep);
+                      setAdminNote(rep.admin_notes || '');
+                      setAssignedTeam(rep.assigned_team || '');
+                      setResolutionUrl(rep.resolution_photo_url || '');
+                      mapInstanceRef.current?.setView([rep.latitude, rep.longitude], 14);
+                    }
+                  }}
+                  className={`rounded-3xl bg-white p-4 shadow-sm border transition-all cursor-pointer ${
                     isSelected
                       ? 'border-purple-500 ring-2 ring-purple-400/40 bg-purple-50/20'
                       : isUrgent
@@ -1312,7 +1386,7 @@ export default function AdminCommandCenter() {
                     </div>
 
                     {/* 1-Click Action Buttons: Call & Google Maps Nav */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <a
                         href={`tel:${rep.reporter_phone}`}
                         className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-bold text-white shadow-md active:scale-95 transition-all"
@@ -1345,7 +1419,7 @@ export default function AdminCommandCenter() {
                   </div>
 
                   {/* 2 Photos Thumbnail Grid with Zoom Click */}
-                  <div className="grid grid-cols-2 gap-2.5 pt-2">
+                  <div className="grid grid-cols-2 gap-2.5 pt-2" onClick={(e) => e.stopPropagation()}>
                     <div className="relative group cursor-pointer" onClick={() => setZoomPhoto(rep.photo_context_url)}>
                       <img
                         src={rep.photo_context_url}
@@ -1429,13 +1503,22 @@ export default function AdminCommandCenter() {
                       </div>
                     </div>
 
-                    {/* Admin Action Note Input */}
+                    {/* Admin Action Note & Resolution Photo Input */}
                     {isSelected && (
-                      <div className="rounded-2xl bg-purple-50/80 border border-purple-200 p-3 space-y-2 animate-fadeIn">
-                        <div className="text-xs font-bold text-purple-950 flex items-center gap-1">
-                          <Wrench className="h-3.5 w-3.5 text-purple-700" />
-                          <span>บันทึกความคืบหน้า & ทีมช่าง:</span>
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-2xl bg-purple-50/80 border border-purple-200 p-3.5 space-y-3 animate-fadeIn"
+                      >
+                        <div className="text-xs font-bold text-purple-950 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Wrench className="h-3.5 w-3.5 text-purple-700" />
+                            <span>บันทึกความคืบหน้า, ทีมช่าง & ภาพถ่ายหลังซ่อม:</span>
+                          </span>
+                          <span className="text-[10px] text-purple-700 font-normal">
+                            (ข้อมูลจะแสดงให้ประชาชนติดตามทันที)
+                          </span>
                         </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           <input
                             type="text"
@@ -1448,9 +1531,70 @@ export default function AdminCommandCenter() {
                             type="text"
                             value={adminNote}
                             onChange={(e) => setAdminNote(e.target.value)}
-                            placeholder="บันทึกข้อความถึงประชาชน เช่น เข้าเทยางมะตอยพรุ่งนี้"
+                            placeholder="บันทึกข้อความถึงประชาชน เช่น เข้าเทยางมะตอยเรียบร้อย"
                             className="rounded-xl border border-purple-200 px-3 py-1.5 text-xs text-stone-900 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
                           />
+                        </div>
+
+                        {/* Resolution Photo Attachment Section */}
+                        <div className="rounded-xl bg-white/90 border border-purple-100 p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
+                              <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>ภาพถ่ายหลังซ่อมแซมเสร็จสิ้น (Resolution Photo)</span>
+                            </span>
+                            {resolutionUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setResolutionUrl('')}
+                                className="text-[10px] text-rose-500 hover:text-rose-700 underline"
+                              >
+                                ลบรูปหลังซ่อม
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={resolutionUrl}
+                              onChange={(e) => setResolutionUrl(e.target.value)}
+                              placeholder="วาง URL รูปภาพหลังซ่อมแซม หรือเลือกจากเครื่อง ->"
+                              className="flex-1 rounded-xl border border-stone-200 px-3 py-1.5 text-xs text-stone-900 bg-stone-50 focus:outline-none font-mono"
+                            />
+
+                            <input
+                              type="file"
+                              ref={resolutionFileInputRef}
+                              onChange={handleResolutionPhotoUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+
+                            <button
+                              type="button"
+                              disabled={isUploadingResolution}
+                              onClick={() => resolutionFileInputRef.current?.click()}
+                              className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                              title="อัปโหลดรูปถ่ายหลังซ่อมจากเครื่อง"
+                            >
+                              <Upload className="h-3 w-3" />
+                              <span>{isUploadingResolution ? 'กำลังแปลงรูป...' : 'แนบรูปหลังซ่อม'}</span>
+                            </button>
+                          </div>
+
+                          {resolutionUrl && (
+                            <div className="relative h-28 w-44 rounded-xl overflow-hidden border border-emerald-300 shadow-sm mt-1">
+                              <img
+                                src={resolutionUrl}
+                                alt="Resolution Preview"
+                                className="h-full w-full object-cover"
+                              />
+                              <span className="absolute bottom-1 left-1 rounded bg-emerald-800/80 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                                ตัวอย่างรูปหลังซ่อม ✨
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex justify-end gap-2 pt-1">
@@ -1458,10 +1602,10 @@ export default function AdminCommandCenter() {
                             type="button"
                             disabled={updatingReportId === rep.id}
                             onClick={() => handleStatusChange(rep.status, rep)}
-                            className="rounded-xl bg-purple-700 hover:bg-purple-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                            className="rounded-xl bg-purple-700 hover:bg-purple-800 px-4 py-2 text-xs font-bold text-white shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
                           >
                             {updatingReportId === rep.id && <RefreshCw className="h-3 w-3 animate-spin" />}
-                            <span>บันทึกข้อมูล</span>
+                            <span>บันทึกความคืบหน้า & รูปภาพ</span>
                           </button>
                         </div>
                       </div>
