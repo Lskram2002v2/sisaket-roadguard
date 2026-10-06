@@ -653,7 +653,7 @@ export default function AdminCommandCenter() {
   };
 
   return (
-    <div className="w-full space-y-4 py-2">
+    <div className="w-full max-w-5xl mx-auto space-y-4 py-2">
       {/* Floating Real-time Status Toast in Top-Right Corner */}
       {incomingToast && (
         <div className="fixed top-4 right-4 z-[9999] w-[92%] max-w-sm rounded-3xl bg-stone-900 text-white p-4 shadow-2xl border-2 border-amber-400 backdrop-blur-md animate-slideInRight">
@@ -1387,14 +1387,24 @@ export default function AdminCommandCenter() {
 
                     {/* 1-Click Action Buttons: Call & Google Maps Nav */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <a
-                        href={`tel:${rep.reporter_phone}`}
-                        className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-bold text-white shadow-md active:scale-95 transition-all"
-                        title="โทรหาผู้แจ้งทันที"
-                      >
-                        <Phone className="h-3.5 w-3.5" />
-                        <span>โทร ({rep.reporter_phone})</span>
-                      </a>
+                      {rep.reporter_phone && !rep.reporter_phone.includes('0XX') ? (
+                        <a
+                          href={`tel:${rep.reporter_phone}`}
+                          className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-bold text-white shadow-md active:scale-95 transition-all"
+                          title="โทรหาผู้แจ้งทันที"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          <span>โทร ({rep.reporter_phone})</span>
+                        </a>
+                      ) : (
+                        <span
+                          className="flex items-center gap-1 rounded-xl bg-stone-100 text-stone-400 px-2.5 py-2 text-xs font-medium border border-stone-200"
+                          title="ผู้แจ้งไม่ได้ระบุเบอร์โทรศัพท์"
+                        >
+                          <Phone className="h-3.5 w-3.5 opacity-50" />
+                          <span>ไม่ระบุเบอร์</span>
+                        </span>
+                      )}
 
                       <a
                         href={`https://www.google.com/maps/dir/?api=1&destination=${rep.latitude},${rep.longitude}`}

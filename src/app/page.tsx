@@ -31,8 +31,8 @@ export default function HomePage() {
         }
       }} />
 
-      {/* Main Container */}
-      <div className="px-3 pt-4 pb-6 space-y-4 flex-1">
+      {/* Main Container with Smooth Centering on Desktop */}
+      <div className="w-full max-w-2xl mx-auto px-3 pt-4 pb-6 space-y-4 flex-1">
         {/* Modern Minimal Tab Switcher with Tour ID */}
         <div id="tour-tab-switcher" className="grid grid-cols-3 gap-1 rounded-2xl bg-stone-200/70 p-1 text-xs font-semibold shadow-inner border border-stone-300/60">
           <button

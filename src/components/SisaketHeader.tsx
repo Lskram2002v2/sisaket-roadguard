@@ -124,8 +124,8 @@ export default function SisaketHeader({ onStartTour }: SisaketHeaderProps) {
         <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-900/85 to-stone-900/65" />
       </div>
 
-      {/* Header Content with 100% Mobile-Friendly Grid */}
-      <div className="relative z-10 px-3.5 pt-4 pb-5 space-y-3">
+      {/* Header Content with 100% Mobile-Friendly Grid & Desktop Centering */}
+      <div className="relative z-10 max-w-2xl mx-auto px-3.5 pt-4 pb-5 space-y-3">
         {/* Top Navbar Row */}
         <div className="flex items-center justify-between gap-2">
           {/* Logo & Branding */}

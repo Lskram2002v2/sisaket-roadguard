@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Send, Phone, FileText, CheckCircle2, Sparkles, Copy, ArrowRight, MapPin } from 'lucide-react';
+import { Send, Phone, FileText, CheckCircle2, Sparkles, Copy, ArrowRight, MapPin, ShieldCheck } from 'lucide-react';
 import ReportMapPicker from './ReportMapPicker';
 import DualPhotoUploader from './DualPhotoUploader';
 import { SISAKET_CENTER, isWithinSisaket, findNearestDistrict } from '@/lib/geofence';
@@ -82,8 +82,8 @@ export default function CitizenReportForm({ isActive = true, onSuccessNavigateTo
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
-      setErrorMsg('กรุณากรอกเบอร์โทรศัพท์ติดต่อ 10 หลักที่ถูกต้อง (เช่น 0812345678) สำหรับเจ้าหน้าที่โทรประสานงาน');
+    if (cleanPhone && (cleanPhone.length < 9 || cleanPhone.length > 10 || !cleanPhone.startsWith('0'))) {
+      setErrorMsg('หากระบุเบอร์โทรศัพท์ กรุณากรอกเบอร์ 9-10 หลักที่ถูกต้อง (เช่น 0812345678)');
       return;
     }
 
@@ -225,6 +225,12 @@ export default function CitizenReportForm({ isActive = true, onSuccessNavigateTo
 
       {/* Main Report Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Privacy & No-Login Guarantee Badge */}
+        <div className="flex items-center gap-2 rounded-2xl bg-amber-500/10 border border-amber-500/20 px-3.5 py-2.5 text-xs text-amber-950 font-medium shadow-sm">
+          <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+          <span>✨ แจ้งได้ทันที ไม่ต้องสมัครสมาชิก • พิกัดและภาพใช้เพื่อการซ่อมบำรุงทางหลวงเท่านั้น</span>
+        </div>
+
         {/* Step 1: Map Picker */}
         <div id="tour-location-section" className="rounded-3xl bg-white p-4 shadow-sm border border-stone-200/90">
           <div className="flex items-center gap-2 mb-3">
@@ -317,27 +323,26 @@ export default function CitizenReportForm({ isActive = true, onSuccessNavigateTo
             </div>
           </div>
 
-          {/* Mandatory Contact Phone */}
+          {/* Optional Contact Phone */}
           <div className="space-y-1.5">
             <label className="flex items-center justify-between text-xs font-semibold text-stone-700">
               <span className="flex items-center gap-1">
                 <Phone className="h-3.5 w-3.5 text-amber-600" />
-                <span>เบอร์โทรศัพท์ติดต่อ <span className="text-amber-700">* (สำคัญ)</span></span>
+                <span>เบอร์โทรศัพท์ติดต่อ <span className="text-stone-400 font-normal">(ไม่บังคับ)</span></span>
               </span>
-              <span className="text-[10px] text-stone-400">10 หลัก</span>
+              <span className="text-[10px] text-stone-400">9-10 หลัก</span>
             </label>
 
             <input
-              required
               type="tel"
               maxLength={10}
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-              placeholder="08XXXXXXXX (สำหรับให้เจ้าหน้าที่โทรประสานงาน)"
+              placeholder="(ไม่บังคับ) ใส่เฉพาะกรณีให้ช่างโทรสอบถามทาง"
               className="w-full rounded-2xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-stone-50/50 font-mono tracking-wider"
             />
             <p className="text-[10px] text-stone-500">
-              🔒 ข้อมูลตาม PDPA: เบอร์จะถูกซ่อนบนหน้าสาธารณะ มีเพียงเจ้าหน้าที่เท่านั้นที่เห็นเพื่อโทรติดต่อ
+              🔒 ความเป็นส่วนตัวตาม PDPA: หากระบุ เบอร์จะถูกเซ็นเซอร์บนหน้าสาธารณะ (08X-XXX-XXXX) เพื่อให้ช่างโทรสอบถามกรณีหาพิกัดไม่เจอเท่านั้น
             </p>
           </div>
         </div>

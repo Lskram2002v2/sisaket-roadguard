@@ -99,9 +99,9 @@ export async function POST(req: Request) {
     }
 
     const cleanPhone = (reporter_phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
+    if (cleanPhone && (cleanPhone.length < 9 || cleanPhone.length > 10 || !cleanPhone.startsWith('0'))) {
       return NextResponse.json(
-        { success: false, error: 'กรุณากรอกเบอร์โทรศัพท์ติดต่อ 10 หลักที่ถูกต้อง (เช่น 0812345678)' },
+        { success: false, error: 'หากระบุเบอร์โทรศัพท์ กรุณากรอกเบอร์ที่ถูกต้อง (เช่น 0812345678)' },
         { status: 400 }
       );
     }
